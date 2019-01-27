@@ -167,7 +167,11 @@ FUNCTION_OVERRIDES = {
     "vkGetDeviceProcAddr" : {"dispatch" : False, "driver" : True, "thunk" : False},
     "vkGetDeviceQueue" : {"dispatch": True, "driver" : False, "thunk" : False},
     "vkGetDeviceQueue2" : {"dispatch": True, "driver" : False, "thunk" : False},
+    "vkGetPhysicalDeviceProperties2": {"dispatch" : True, "driver" : False, "thunk" : False},
     "vkQueueSubmit" : {"dispatch": True, "driver" : False, "thunk" : False},
+
+    # VK_KHR_get_physical_device_properties2
+    "vkGetPhysicalDeviceProperties2KHR": {"dispatch" : True, "driver" : False, "thunk" : False},
 
     # VK_KHR_surface
     "vkDestroySurfaceKHR" : {"dispatch" : True, "driver" : True, "thunk" : True},

@@ -22,6 +22,11 @@
 #include "windef.h"
 #include "winbase.h"
 #include "winuser.h"
+#include "winreg.h"
+#include "initguid.h"
+#include "devguid.h"
+#include "devpkey.h"
+#include "setupapi.h"
 
 #include "vulkan_private.h"
 
@@ -33,6 +38,11 @@ WINE_DEFAULT_DEBUG_CHANNEL(vulkan);
  * aware of. Version 5 adds more extensive version checks. Something to tackle later.
  */
 #define WINE_VULKAN_ICD_VERSION 4
+
+/* Device property keys for getting UUID and LUID of adapters via SetupAPI */
+DEFINE_DEVPROPKEY(DEVPROPKEY_DISPLAY_ADAPTER_LUID, 0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0xf1, 0x73, 0xab, 0xad, 0x3e, 0xc6, 2);
+/* Private DEVPROPKEY for associating an adapter to a vulkan adapter */
+DEFINE_DEVPROPKEY(DEVPROPKEY_DISPLAY_ADAPTER_UUID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
 
 /* All Vulkan structures use this structure for the first elements. */
 struct wine_vk_structure_header
@@ -1226,6 +1236,234 @@ VkResult WINAPI wine_vkEnumeratePhysicalDeviceGroupsKHR(VkInstance instance,
     TRACE("%p, %p, %p\n", instance, count, properties);
     return wine_vk_enumerate_physical_device_groups(instance,
             instance->funcs.p_vkEnumeratePhysicalDeviceGroupsKHR, count, properties);
+}
+
+/* Copied from generated code vulkan_thunks.c */
+static inline void convert_VkPhysicalDeviceLimits_host_to_win(const VkPhysicalDeviceLimits_host *in,
+                                                              VkPhysicalDeviceLimits *out)
+{
+    if (!in)
+        return;
+
+    out->maxImageDimension1D = in->maxImageDimension1D;
+    out->maxImageDimension2D = in->maxImageDimension2D;
+    out->maxImageDimension3D = in->maxImageDimension3D;
+    out->maxImageDimensionCube = in->maxImageDimensionCube;
+    out->maxImageArrayLayers = in->maxImageArrayLayers;
+    out->maxTexelBufferElements = in->maxTexelBufferElements;
+    out->maxUniformBufferRange = in->maxUniformBufferRange;
+    out->maxStorageBufferRange = in->maxStorageBufferRange;
+    out->maxPushConstantsSize = in->maxPushConstantsSize;
+    out->maxMemoryAllocationCount = in->maxMemoryAllocationCount;
+    out->maxSamplerAllocationCount = in->maxSamplerAllocationCount;
+    out->bufferImageGranularity = in->bufferImageGranularity;
+    out->sparseAddressSpaceSize = in->sparseAddressSpaceSize;
+    out->maxBoundDescriptorSets = in->maxBoundDescriptorSets;
+    out->maxPerStageDescriptorSamplers = in->maxPerStageDescriptorSamplers;
+    out->maxPerStageDescriptorUniformBuffers = in->maxPerStageDescriptorUniformBuffers;
+    out->maxPerStageDescriptorStorageBuffers = in->maxPerStageDescriptorStorageBuffers;
+    out->maxPerStageDescriptorSampledImages = in->maxPerStageDescriptorSampledImages;
+    out->maxPerStageDescriptorStorageImages = in->maxPerStageDescriptorStorageImages;
+    out->maxPerStageDescriptorInputAttachments = in->maxPerStageDescriptorInputAttachments;
+    out->maxPerStageResources = in->maxPerStageResources;
+    out->maxDescriptorSetSamplers = in->maxDescriptorSetSamplers;
+    out->maxDescriptorSetUniformBuffers = in->maxDescriptorSetUniformBuffers;
+    out->maxDescriptorSetUniformBuffersDynamic = in->maxDescriptorSetUniformBuffersDynamic;
+    out->maxDescriptorSetStorageBuffers = in->maxDescriptorSetStorageBuffers;
+    out->maxDescriptorSetStorageBuffersDynamic = in->maxDescriptorSetStorageBuffersDynamic;
+    out->maxDescriptorSetSampledImages = in->maxDescriptorSetSampledImages;
+    out->maxDescriptorSetStorageImages = in->maxDescriptorSetStorageImages;
+    out->maxDescriptorSetInputAttachments = in->maxDescriptorSetInputAttachments;
+    out->maxVertexInputAttributes = in->maxVertexInputAttributes;
+    out->maxVertexInputBindings = in->maxVertexInputBindings;
+    out->maxVertexInputAttributeOffset = in->maxVertexInputAttributeOffset;
+    out->maxVertexInputBindingStride = in->maxVertexInputBindingStride;
+    out->maxVertexOutputComponents = in->maxVertexOutputComponents;
+    out->maxTessellationGenerationLevel = in->maxTessellationGenerationLevel;
+    out->maxTessellationPatchSize = in->maxTessellationPatchSize;
+    out->maxTessellationControlPerVertexInputComponents = in->maxTessellationControlPerVertexInputComponents;
+    out->maxTessellationControlPerVertexOutputComponents = in->maxTessellationControlPerVertexOutputComponents;
+    out->maxTessellationControlPerPatchOutputComponents = in->maxTessellationControlPerPatchOutputComponents;
+    out->maxTessellationControlTotalOutputComponents = in->maxTessellationControlTotalOutputComponents;
+    out->maxTessellationEvaluationInputComponents = in->maxTessellationEvaluationInputComponents;
+    out->maxTessellationEvaluationOutputComponents = in->maxTessellationEvaluationOutputComponents;
+    out->maxGeometryShaderInvocations = in->maxGeometryShaderInvocations;
+    out->maxGeometryInputComponents = in->maxGeometryInputComponents;
+    out->maxGeometryOutputComponents = in->maxGeometryOutputComponents;
+    out->maxGeometryOutputVertices = in->maxGeometryOutputVertices;
+    out->maxGeometryTotalOutputComponents = in->maxGeometryTotalOutputComponents;
+    out->maxFragmentInputComponents = in->maxFragmentInputComponents;
+    out->maxFragmentOutputAttachments = in->maxFragmentOutputAttachments;
+    out->maxFragmentDualSrcAttachments = in->maxFragmentDualSrcAttachments;
+    out->maxFragmentCombinedOutputResources = in->maxFragmentCombinedOutputResources;
+    out->maxComputeSharedMemorySize = in->maxComputeSharedMemorySize;
+    memcpy(out->maxComputeWorkGroupCount, in->maxComputeWorkGroupCount, 3 * sizeof(uint32_t));
+    out->maxComputeWorkGroupInvocations = in->maxComputeWorkGroupInvocations;
+    memcpy(out->maxComputeWorkGroupSize, in->maxComputeWorkGroupSize, 3 * sizeof(uint32_t));
+    out->subPixelPrecisionBits = in->subPixelPrecisionBits;
+    out->subTexelPrecisionBits = in->subTexelPrecisionBits;
+    out->mipmapPrecisionBits = in->mipmapPrecisionBits;
+    out->maxDrawIndexedIndexValue = in->maxDrawIndexedIndexValue;
+    out->maxDrawIndirectCount = in->maxDrawIndirectCount;
+    out->maxSamplerLodBias = in->maxSamplerLodBias;
+    out->maxSamplerAnisotropy = in->maxSamplerAnisotropy;
+    out->maxViewports = in->maxViewports;
+    memcpy(out->maxViewportDimensions, in->maxViewportDimensions, 2 * sizeof(uint32_t));
+    memcpy(out->viewportBoundsRange, in->viewportBoundsRange, 2 * sizeof(float));
+    out->viewportSubPixelBits = in->viewportSubPixelBits;
+    out->minMemoryMapAlignment = in->minMemoryMapAlignment;
+    out->minTexelBufferOffsetAlignment = in->minTexelBufferOffsetAlignment;
+    out->minUniformBufferOffsetAlignment = in->minUniformBufferOffsetAlignment;
+    out->minStorageBufferOffsetAlignment = in->minStorageBufferOffsetAlignment;
+    out->minTexelOffset = in->minTexelOffset;
+    out->maxTexelOffset = in->maxTexelOffset;
+    out->minTexelGatherOffset = in->minTexelGatherOffset;
+    out->maxTexelGatherOffset = in->maxTexelGatherOffset;
+    out->minInterpolationOffset = in->minInterpolationOffset;
+    out->maxInterpolationOffset = in->maxInterpolationOffset;
+    out->subPixelInterpolationOffsetBits = in->subPixelInterpolationOffsetBits;
+    out->maxFramebufferWidth = in->maxFramebufferWidth;
+    out->maxFramebufferHeight = in->maxFramebufferHeight;
+    out->maxFramebufferLayers = in->maxFramebufferLayers;
+    out->framebufferColorSampleCounts = in->framebufferColorSampleCounts;
+    out->framebufferDepthSampleCounts = in->framebufferDepthSampleCounts;
+    out->framebufferStencilSampleCounts = in->framebufferStencilSampleCounts;
+    out->framebufferNoAttachmentsSampleCounts = in->framebufferNoAttachmentsSampleCounts;
+    out->maxColorAttachments = in->maxColorAttachments;
+    out->sampledImageColorSampleCounts = in->sampledImageColorSampleCounts;
+    out->sampledImageIntegerSampleCounts = in->sampledImageIntegerSampleCounts;
+    out->sampledImageDepthSampleCounts = in->sampledImageDepthSampleCounts;
+    out->sampledImageStencilSampleCounts = in->sampledImageStencilSampleCounts;
+    out->storageImageSampleCounts = in->storageImageSampleCounts;
+    out->maxSampleMaskWords = in->maxSampleMaskWords;
+    out->timestampComputeAndGraphics = in->timestampComputeAndGraphics;
+    out->timestampPeriod = in->timestampPeriod;
+    out->maxClipDistances = in->maxClipDistances;
+    out->maxCullDistances = in->maxCullDistances;
+    out->maxCombinedClipAndCullDistances = in->maxCombinedClipAndCullDistances;
+    out->discreteQueuePriorities = in->discreteQueuePriorities;
+    memcpy(out->pointSizeRange, in->pointSizeRange, 2 * sizeof(float));
+    memcpy(out->lineWidthRange, in->lineWidthRange, 2 * sizeof(float));
+    out->pointSizeGranularity = in->pointSizeGranularity;
+    out->lineWidthGranularity = in->lineWidthGranularity;
+    out->strictLines = in->strictLines;
+    out->standardSampleLocations = in->standardSampleLocations;
+    out->optimalBufferCopyOffsetAlignment = in->optimalBufferCopyOffsetAlignment;
+    out->optimalBufferCopyRowPitchAlignment = in->optimalBufferCopyRowPitchAlignment;
+    out->nonCoherentAtomSize = in->nonCoherentAtomSize;
+}
+
+static inline void convert_VkPhysicalDeviceProperties_host_to_win(const VkPhysicalDeviceProperties_host *in,
+                                                                  VkPhysicalDeviceProperties *out)
+{
+    if (!in)
+        return;
+
+    out->apiVersion = in->apiVersion;
+    out->driverVersion = in->driverVersion;
+    out->vendorID = in->vendorID;
+    out->deviceID = in->deviceID;
+    out->deviceType = in->deviceType;
+    memcpy(out->deviceName, in->deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE * sizeof(char));
+    memcpy(out->pipelineCacheUUID, in->pipelineCacheUUID, VK_UUID_SIZE * sizeof(uint8_t));
+    convert_VkPhysicalDeviceLimits_host_to_win(&in->limits, &out->limits);
+    out->sparseProperties = in->sparseProperties;
+}
+
+static inline void convert_VkPhysicalDeviceProperties2_win_to_host(const VkPhysicalDeviceProperties2 *in,
+                                                                   VkPhysicalDeviceProperties2_host *out)
+{
+    if (!in)
+        return;
+
+    out->pNext = in->pNext;
+    out->sType = in->sType;
+}
+
+static inline void convert_VkPhysicalDeviceProperties2_host_to_win(const VkPhysicalDeviceProperties2_host *in,
+                                                                   VkPhysicalDeviceProperties2 *out)
+{
+    if (!in)
+        return;
+
+    out->sType = in->sType;
+    out->pNext = in->pNext;
+    convert_VkPhysicalDeviceProperties_host_to_win(&in->properties, &out->properties);
+}
+
+static BOOL wine_get_adapter_luid(const GUID *uuid, LUID *luid)
+{
+    HDEVINFO devinfo;
+    SP_DEVINFO_DATA devinfo_data = {sizeof(SP_DEVINFO_DATA)};
+    DEVPROPTYPE property_type;
+    GUID result;
+    UINT i;
+
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, NULL, NULL, DIGCF_PRESENT);
+    if (devinfo == INVALID_HANDLE_VALUE)
+        return FALSE;
+
+    for (i = 0; SetupDiEnumDeviceInfo(devinfo, i, &devinfo_data); ++i)
+    {
+        property_type = DEVPROP_TYPE_UINT64;
+        if (!SetupDiGetDevicePropertyW(devinfo, &devinfo_data, &DEVPROPKEY_DISPLAY_ADAPTER_UUID, &property_type,
+                                       (BYTE *)&result, sizeof(result), NULL, 0))
+            continue;
+
+        if (IsEqualGUID(&result, uuid))
+        {
+            if (SetupDiGetDevicePropertyW(devinfo, &devinfo_data, &DEVPROPKEY_DISPLAY_ADAPTER_LUID, &property_type,
+                                          (BYTE *)luid, sizeof(*luid), NULL, 0))
+                return TRUE;
+        }
+    }
+
+    SetupDiDestroyDeviceInfoList(devinfo);
+    return FALSE;
+}
+
+static void wine_fill_physical_device_id_luid(VkPhysicalDeviceProperties2 *properties)
+{
+    VkPhysicalDeviceIDProperties *id;
+    struct wine_vk_structure_header *header;
+
+    for (header = properties->pNext; header; header = header->pNext)
+    {
+        if (header->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES)
+        {
+            id = (VkPhysicalDeviceIDProperties *)header;
+            if (wine_get_adapter_luid((const GUID *)id->deviceUUID, (LUID *)id->deviceLUID))
+            {
+                id->deviceNodeMask = 1;
+                id->deviceLUIDValid = VK_TRUE;
+            }
+        }
+    }
+}
+
+void WINAPI wine_vkGetPhysicalDeviceProperties2KHR(VkPhysicalDevice physicalDevice,
+                                                   VkPhysicalDeviceProperties2 *pProperties)
+{
+#if defined(USE_STRUCT_CONVERSION)
+    VkPhysicalDeviceProperties2_host pProperties_host;
+    TRACE("%p, %p\n", physicalDevice, pProperties);
+
+    convert_VkPhysicalDeviceProperties2_win_to_host(pProperties, &pProperties_host);
+    physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties2KHR(physicalDevice->phys_dev, &pProperties_host);
+
+    convert_VkPhysicalDeviceProperties2_host_to_win(&pProperties_host, pProperties);
+#else
+    TRACE("%p, %p\n", physicalDevice, pProperties);
+    physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties2KHR(physicalDevice->phys_dev, pProperties);
+#endif
+
+    wine_fill_physical_device_id_luid(pProperties);
+}
+
+void WINAPI wine_vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevice,
+                                                VkPhysicalDeviceProperties2 *pProperties)
+{
+    wine_vkGetPhysicalDeviceProperties2KHR(physicalDevice, pProperties);
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, void *reserved)

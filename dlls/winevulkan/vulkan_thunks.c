@@ -1094,23 +1094,6 @@ static inline void convert_VkPhysicalDeviceProperties_host_to_win(const VkPhysic
     out->sparseProperties = in->sparseProperties;
 }
 
-static inline void convert_VkPhysicalDeviceProperties2_win_to_host(const VkPhysicalDeviceProperties2 *in, VkPhysicalDeviceProperties2_host *out)
-{
-    if (!in) return;
-
-    out->pNext = in->pNext;
-    out->sType = in->sType;
-}
-
-static inline void convert_VkPhysicalDeviceProperties2_host_to_win(const VkPhysicalDeviceProperties2_host *in, VkPhysicalDeviceProperties2 *out)
-{
-    if (!in) return;
-
-    out->sType = in->sType;
-    out->pNext = in->pNext;
-    convert_VkPhysicalDeviceProperties_host_to_win(&in->properties, &out->properties);
-}
-
 static inline VkSparseMemoryBind_host *convert_VkSparseMemoryBind_array_win_to_host(const VkSparseMemoryBind *in, uint32_t count)
 {
     VkSparseMemoryBind_host *out;
@@ -2981,38 +2964,6 @@ void WINAPI wine_vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalDevice, 
 #else
     TRACE("%p, %p\n", physicalDevice, pProperties);
     physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties(physicalDevice->phys_dev, pProperties);
-#endif
-}
-
-void WINAPI wine_vkGetPhysicalDeviceProperties2(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties2 *pProperties)
-{
-#if defined(USE_STRUCT_CONVERSION)
-    VkPhysicalDeviceProperties2_host pProperties_host;
-    TRACE("%p, %p\n", physicalDevice, pProperties);
-
-    convert_VkPhysicalDeviceProperties2_win_to_host(pProperties, &pProperties_host);
-    physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties2(physicalDevice->phys_dev, &pProperties_host);
-
-    convert_VkPhysicalDeviceProperties2_host_to_win(&pProperties_host, pProperties);
-#else
-    TRACE("%p, %p\n", physicalDevice, pProperties);
-    physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties2(physicalDevice->phys_dev, pProperties);
-#endif
-}
-
-static void WINAPI wine_vkGetPhysicalDeviceProperties2KHR(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties2 *pProperties)
-{
-#if defined(USE_STRUCT_CONVERSION)
-    VkPhysicalDeviceProperties2_host pProperties_host;
-    TRACE("%p, %p\n", physicalDevice, pProperties);
-
-    convert_VkPhysicalDeviceProperties2_win_to_host(pProperties, &pProperties_host);
-    physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties2KHR(physicalDevice->phys_dev, &pProperties_host);
-
-    convert_VkPhysicalDeviceProperties2_host_to_win(&pProperties_host, pProperties);
-#else
-    TRACE("%p, %p\n", physicalDevice, pProperties);
-    physicalDevice->instance->funcs.p_vkGetPhysicalDeviceProperties2KHR(physicalDevice->phys_dev, pProperties);
 #endif
 }
 
