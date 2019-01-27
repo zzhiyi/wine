@@ -2683,6 +2683,7 @@ struct wined3d_adapter
     UINT64 vram_bytes_used;
     LUID luid;
 
+    WCHAR name[256];                  /* physical adapter name, for use with e.g. IDXGIAdapter::GetDesc */
     WCHAR device_name[CCHDEVICENAME]; /* for use with e.g. ChangeDisplaySettings() */
     unsigned int cfg_count;
     struct wined3d_pixel_format *cfgs;

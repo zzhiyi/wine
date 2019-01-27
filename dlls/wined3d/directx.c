@@ -1172,6 +1172,7 @@ HRESULT CDECL wined3d_set_adapter_display_mode(struct wined3d *wined3d,
 HRESULT CDECL wined3d_get_adapter_identifier(const struct wined3d *wined3d,
         UINT adapter_idx, DWORD flags, struct wined3d_adapter_identifier *identifier)
 {
+    static const WCHAR x11_default_adapter_name[] = {'W', 'i', 'n', 'e', ' ', 'X', '1', '1', ' ', 'D', 'r', 'i', 'v', 'e', 'r', 0};
     const struct wined3d_adapter *adapter;
     size_t len;
 
@@ -1195,10 +1196,19 @@ HRESULT CDECL wined3d_get_adapter_identifier(const struct wined3d *wined3d,
 
     if (identifier->description_size)
     {
-        const char *description = adapter->driver_info.description;
-        len = min(strlen(description), identifier->description_size - 1);
-        memcpy(identifier->description, description, len);
-        memset(&identifier->description[len], 0, identifier->description_size - len);
+        if(!strcmpW(adapter->name, x11_default_adapter_name))
+        {
+            const char *description = adapter->driver_info.description;
+            len = min(strlen(description), identifier->description_size - 1);
+            memcpy(identifier->description, description, len);
+            memset(&identifier->description[len], 0, identifier->description_size - len);
+        }
+        else if (!WideCharToMultiByte(CP_ACP, 0, adapter->name, -1, identifier->description, identifier->description_size,
+                                 NULL, NULL))
+        {
+            ERR("Failed to convert adapter name, last error %#x.\n", GetLastError());
+            goto fail;
+        }
     }
 
     /* Note that d3d8 doesn't supply a device name. */
@@ -2542,6 +2552,9 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int o
 
     adapter->ordinal = ordinal;
 
+    /* We need to differentiate the adapter->name and the adapter->device_name here.
+     * the device name from EnumDisplayDevicesW is \\.\\DISPLAY0 for example, which is the name of an output
+     * in DXGI concept, whereas adapter->name is the name of a physical adapter. */
     display_device.cb = sizeof(display_device);
     /* FIXME: EnumDisplayDevicesW is a stub. It doesn't support multiple displays and adapters.
      * Use the first device name for now. */
@@ -2600,6 +2613,14 @@ HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
                                        (BYTE *)&wined3d->adapters[i].luid, sizeof(LUID), NULL, 0))
         {
             WARN("Failed to get adapter %u luid.\n", i);
+            goto fail;
+        }
+
+        property_type = DEVPROP_TYPE_STRING;
+        if (!SetupDiGetDevicePropertyW(devinfo, &devinfo_data, &DEVPKEY_NAME, &property_type,
+                                       (BYTE *)&wined3d->adapters[i].name, sizeof(wined3d->adapters[i].name), NULL, 0))
+        {
+            WARN("Failed to get adapter %u name.\n", i);
             goto fail;
         }
 
