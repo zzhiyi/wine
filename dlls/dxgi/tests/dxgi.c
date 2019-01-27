@@ -22,6 +22,9 @@
 #include "dxgi1_6.h"
 #include "d3d11.h"
 #include "d3d12.h"
+#include "devguid.h"
+#include "devpkey.h"
+#include "setupapi.h"
 #include "wine/heap.h"
 #include "wine/test.h"
 
@@ -817,6 +820,117 @@ static void test_adapter_luid(void)
     }
 
     refcount = IDXGIFactory4_Release(factory4);
+    ok(!refcount, "Factory has %u references left.\n", refcount);
+}
+
+DEFINE_DEVPROPKEY(DEVPROPKEY_DISPLAY_ADAPTER_LUID,
+                  0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0xf1, 0x73, 0xab, 0xad, 0x3e, 0xc6, 2);
+
+static void test_display_adapters(void)
+{
+    static const WCHAR default_x11_nameW[] = {'W', 'i', 'n', 'e', ' ', 'X', '1', '1', ' ', 'D', 'r', 'i', 'v', 'e', 'r', 0};
+    DXGI_ADAPTER_DESC adapter_desc;
+    BOOL found_display_adapter;
+    unsigned int adapter_index;
+    unsigned int device_index;
+    DEVPROPTYPE property_type;
+    IDXGIFactory *factory;
+    IDXGIAdapter *adapter;
+    SP_DEVINFO_DATA data;
+    HDEVINFO dev_info;
+    DWORD last_error;
+    ULONG refcount;
+    void *buffer;
+    WCHAR *name;
+    DWORD size;
+    HRESULT hr;
+    LUID luid;
+    BOOL ret;
+
+    hr = CreateDXGIFactory(&IID_IDXGIFactory, (void **)&factory);
+    ok(hr == S_OK, "Failed to create DXGI factory, hr %#x.\n", hr);
+
+    for (adapter_index = 0; (hr = IDXGIFactory_EnumAdapters(factory, adapter_index, &adapter)) == S_OK; ++adapter_index)
+    {
+        hr = IDXGIAdapter_GetDesc(adapter, &adapter_desc);
+        ok(hr == S_OK, "Failed to get adapter desc, hr %#x.\n", hr);
+        refcount = IDXGIAdapter_Release(adapter);
+        ok(!refcount, "Adapter has %u references left.\n", refcount);
+
+        /* Skip WARP. */
+        if ((!adapter_desc.SubSysId && !adapter_desc.Revision && !adapter_desc.VendorId && !adapter_desc.DeviceId)
+            || (adapter_desc.VendorId == 0x1414 && adapter_desc.DeviceId == 0x008c))
+            continue;
+
+        found_display_adapter = FALSE;
+
+        dev_info = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, NULL, NULL, DIGCF_PRESENT);
+        ok(dev_info != INVALID_HANDLE_VALUE, "Failed to get device information set.\n");
+
+        data.cbSize = sizeof(data);
+        for (device_index = 0; SetupDiEnumDeviceInfo(dev_info, device_index, &data); ++device_index)
+        {
+            /* LUID */
+            size = 0;
+            property_type = DEVPROP_TYPE_EMPTY;
+            ret = SetupDiGetDevicePropertyW(dev_info, &data, &DEVPROPKEY_DISPLAY_ADAPTER_LUID,
+                                            &property_type, NULL, 0, &size, 0);
+            last_error = GetLastError();
+            ok(!ret && last_error == ERROR_INSUFFICIENT_BUFFER,
+               "Failed to get device property size, ret %#x, last_error %#x.\n", ret, last_error);
+            ok(property_type == DEVPROP_TYPE_UINT64, "Got unexpected property type %#x.\n", property_type);
+            ok(size == sizeof(LUID), "Got unexpected size %u.\n", size);
+
+            buffer = heap_alloc(size);
+            ok(!!buffer, "Failed to allocate memory.\n");
+            ret = SetupDiGetDevicePropertyW(dev_info, &data, &DEVPROPKEY_DISPLAY_ADAPTER_LUID,
+                                            &property_type, buffer, size, &size, 0);
+            ok(ret, "Failed to get device property, ret %#x, last_error %#x.\n", ret, GetLastError());
+            luid = *(LUID *)buffer;
+            heap_free(buffer);
+
+            if (equal_luid(luid, adapter_desc.AdapterLuid))
+            {
+                found_display_adapter = TRUE;
+
+                /* name */
+                size = 0;
+                property_type = DEVPROP_TYPE_STRING;
+                ret = SetupDiGetDevicePropertyW(dev_info, &data, &DEVPKEY_NAME,
+                                                &property_type, NULL, 0, &size, 0);
+                last_error = GetLastError();
+                ok(!ret && last_error == ERROR_INSUFFICIENT_BUFFER,
+                   "Failed to get device property size, ret %#x, last_error %#x.\n", ret, last_error);
+                ok(property_type == DEVPROP_TYPE_STRING, "Got unexpected property type %#x.\n", property_type);
+
+                name = heap_alloc(size);
+                ok(!!name, "Failed to allocate memory.\n");
+                ret = SetupDiGetDevicePropertyW(dev_info, &data, &DEVPKEY_NAME,
+                                                &property_type, (void *)name, size, &size, 0);
+                ok(ret, "Failed to get device property, ret %#x, last_error %#x.\n", ret, GetLastError());
+
+                /* On Wine if Vulkan is not supported, the adapter name stored in registry is a default name */
+                todo_wine_if(!lstrcmpW(name, default_x11_nameW))
+                {
+                    ok(!lstrcmpW(adapter_desc.Description, name), "Adapter names do not match: %s, %s.\n",
+                       wine_dbgstr_w(adapter_desc.Description), wine_dbgstr_w(name));
+                }
+
+                heap_free(name);
+                break;
+            }
+        }
+
+        ret = SetupDiDestroyDeviceInfoList(dev_info);
+        ok(ret, "Failed to destroy device info list.\n");
+
+        ok(found_display_adapter, "Failed to find display adapter for IDXGIAdapter %u (%s %04x:%04x).\n",
+               adapter_index, wine_dbgstr_w(adapter_desc.Description),
+               adapter_desc.VendorId, adapter_desc.DeviceId);
+    }
+    ok(hr == DXGI_ERROR_NOT_FOUND, "Got unexpected hr %#x.\n", hr);
+
+    refcount = IDXGIFactory_Release(factory);
     ok(!refcount, "Factory has %u references left.\n", refcount);
 }
 
@@ -5018,6 +5132,7 @@ START_TEST(dxgi)
 
     queue_test(test_adapter_desc);
     queue_test(test_adapter_luid);
+    queue_test(test_display_adapters);
     queue_test(test_query_video_memory_info);
     queue_test(test_check_interface_support);
     queue_test(test_create_surface);
