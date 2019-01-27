@@ -59,6 +59,9 @@ static BOOL WINAPI device_init( INIT_ONCE *once, void *param, void **context )
 
     stock_bitmap_pixmap = XCreatePixmap( gdi_display, root_window, 1, 1, 1 );
 
+    /* Enumerate adapters */
+    X11DRV_Adapter_Init();
+
     return TRUE;
 }
 
