@@ -26,6 +26,10 @@
 
 #include "wined3d_private.h"
 #include "winternl.h"
+#include "initguid.h"
+#include "devguid.h"
+#include "devpkey.h"
+#include "setupapi.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 
@@ -42,6 +46,8 @@ enum wined3d_driver_model
 
 /* The d3d device ID */
 static const GUID IID_D3DDEVICE_D3DUID = { 0xaeb2cdd4, 0x6e41, 0x43ea, { 0x94,0x1c,0x83,0x61,0xcc,0x76,0x07,0x81 } };
+
+DEFINE_DEVPROPKEY(DEVPROPKEY_DISPLAY_ADAPTER_LUID, 0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0xf1, 0x73, 0xab, 0xad, 0x3e, 0xc6, 2);
 
 /**********************************************************
  * Utility functions follow
@@ -100,6 +106,7 @@ ULONG CDECL wined3d_decref(struct wined3d *wined3d)
         {
             wined3d_adapter_cleanup(&wined3d->adapters[i]);
         }
+        heap_free(wined3d->adapters);
         heap_free(wined3d);
     }
 
@@ -745,6 +752,7 @@ HRESULT CDECL wined3d_get_output_desc(const struct wined3d *wined3d, unsigned in
         return hr;
 
     memcpy(desc->device_name, adapter->device_name, sizeof(desc->device_name));
+
     SetRect(&desc->desktop_rect, 0, 0, mode.width, mode.height);
     OffsetRect(&desc->desktop_rect, adapter->monitor_position.x, adapter->monitor_position.y);
     /* FIXME: We should get this from EnumDisplayDevices() when the adapters
@@ -2535,17 +2543,11 @@ static BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int o
     adapter->ordinal = ordinal;
 
     display_device.cb = sizeof(display_device);
-    EnumDisplayDevicesW(NULL, ordinal, &display_device, 0);
+    /* FIXME: EnumDisplayDevicesW is a stub. It doesn't support multiple displays and adapters.
+     * Use the first device name for now. */
+    EnumDisplayDevicesW(NULL, 0, &display_device, 0);
     TRACE("Display device: %s.\n", debugstr_w(display_device.DeviceName));
     strcpyW(adapter->device_name, display_device.DeviceName);
-
-    if (!AllocateLocallyUniqueId(&adapter->luid))
-    {
-        ERR("Failed to set adapter LUID (%#x).\n", GetLastError());
-        return FALSE;
-    }
-    TRACE("Allocated LUID %08x:%08x for adapter %p.\n",
-            adapter->luid.HighPart, adapter->luid.LowPart, adapter);
 
     adapter->formats = NULL;
 
@@ -2563,17 +2565,55 @@ const struct wined3d_parent_ops wined3d_null_parent_ops =
 
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
 {
+    HDEVINFO devinfo;
+    SP_DEVINFO_DATA devinfo_data = {sizeof(SP_DEVINFO_DATA)};
+    DEVPROPTYPE property_type;
+    UINT i = 0, adapter_count = 0;
+    BOOL ret = E_FAIL;
+
     wined3d->ref = 1;
     wined3d->flags = flags;
 
     TRACE("Initialising adapters.\n");
 
-    if (!wined3d_adapter_init(&wined3d->adapters[0], 0, flags))
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, NULL, NULL, DIGCF_PRESENT);
+    if (devinfo == INVALID_HANDLE_VALUE)
     {
-        WARN("Failed to initialise adapter.\n");
+        ERR("Failed to get adapter list.\n");
         return E_FAIL;
     }
-    wined3d->adapter_count = 1;
 
-    return WINED3D_OK;
+    while (SetupDiEnumDeviceInfo(devinfo, i++, &devinfo_data))
+        adapter_count++;
+
+    wined3d->adapters = heap_alloc_zero(sizeof(struct wined3d_adapter) * adapter_count);
+    if (!wined3d->adapters)
+    {
+        ret = E_OUTOFMEMORY;
+        goto fail;
+    }
+
+    for (i = 0; SetupDiEnumDeviceInfo(devinfo, i, &devinfo_data); ++i)
+    {
+        property_type = DEVPROP_TYPE_UINT64;
+        if (!SetupDiGetDevicePropertyW(devinfo, &devinfo_data, &DEVPROPKEY_DISPLAY_ADAPTER_LUID, &property_type,
+                                       (BYTE *)&wined3d->adapters[i].luid, sizeof(LUID), NULL, 0))
+        {
+            WARN("Failed to get adapter %u luid.\n", i);
+            goto fail;
+        }
+
+        if (!wined3d_adapter_init(&wined3d->adapters[i], i, flags))
+        {
+            WARN("Failed to initialise adapter %u.\n", i);
+            goto fail;
+        }
+    }
+
+    wined3d->adapter_count = adapter_count;
+
+    ret = WINED3D_OK;
+fail:
+    SetupDiDestroyDeviceInfoList(devinfo);
+    return ret;
 }

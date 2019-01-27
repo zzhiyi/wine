@@ -2844,7 +2844,7 @@ struct wined3d
     LONG ref;
     DWORD flags;
     UINT adapter_count;
-    struct wined3d_adapter adapters[1];
+    struct wined3d_adapter *adapters;
 };
 
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags) DECLSPEC_HIDDEN;
