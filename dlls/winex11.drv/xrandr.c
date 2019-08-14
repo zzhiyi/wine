@@ -277,6 +277,20 @@ static void xrandr10_init_modes(void)
 
 #ifdef HAVE_XRRGETSCREENRESOURCES
 
+static XRRScreenResources *xrandr_get_screen_resources(void)
+{
+    XRRScreenResources *resources = pXRRGetScreenResourcesCurrent( gdi_display, root_window );
+    if (resources && !resources->ncrtc)
+    {
+        pXRRFreeScreenResources( resources );
+        resources = pXRRGetScreenResources( gdi_display, root_window );
+    }
+
+    if (!resources)
+        ERR("Failed to get screen resources.\n");
+    return resources;
+}
+
 static int xrandr12_get_current_mode(void)
 {
     XRRScreenResources *resources;
@@ -453,21 +467,8 @@ static int xrandr12_init_modes(void)
     int ret = -1;
     int i, j;
 
-    if (!(resources = pXRRGetScreenResourcesCurrent( gdi_display, root_window )))
-    {
-        ERR("Failed to get screen resources.\n");
+    if (!(resources = xrandr_get_screen_resources()))
         return ret;
-    }
-
-    if (!resources->ncrtc)
-    {
-        pXRRFreeScreenResources( resources );
-        if (!(resources = pXRRGetScreenResources( gdi_display, root_window )))
-        {
-            ERR("Failed to get screen resources.\n");
-            return ret;
-        }
-    }
 
     if (!(crtc_info = xrandr12_get_primary_crtc_info( resources, &primary_crtc )))
     {
