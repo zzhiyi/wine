@@ -40,6 +40,8 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winuser.h"
+#include "commctrl.h"
+#include "v6util.h"
 
 #define MAXHWNDS 1024
 static HWND hwnd [MAXHWNDS];
@@ -48,7 +50,7 @@ static unsigned int numwnds=1; /* 0 is reserved for null */
 /* Global handles */
 static HINSTANCE g_hinst;                          /* This application's HINSTANCE */
 static HWND g_hwndMain, g_hwndButton1, g_hwndButton2, g_hwndButtonCancel;
-static HWND g_hwndTestDlg, g_hwndTestDlgBut1, g_hwndTestDlgBut2, g_hwndTestDlgEdit;
+static HWND g_hwndTestDlg, g_hwndTestDlgBut1, g_hwndTestDlgBut2, g_hwndTestDlgBut3, g_hwndTestDlgBut4, g_hwndTestDlgEdit;
 static HWND g_hwndInitialFocusT1, g_hwndInitialFocusT2, g_hwndInitialFocusGroupBox;
 
 static LONG g_styleInitialFocusT1, g_styleInitialFocusT2;
@@ -457,6 +459,16 @@ static BOOL OnTestDlgCreate (HWND hwnd, LPCREATESTRUCTA lpcs)
             90,102,80,24, hwnd, (HMENU)IDCANCEL, g_hinst, 0);
     if (!g_hwndTestDlgBut2) return FALSE;
 
+    g_hwndTestDlgBut3 = CreateWindowExA(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR | WS_EX_NOPARENTNOTIFY,
+            "button", "Button &3", WS_CHILDWINDOW | WS_VISIBLE | WS_TABSTOP | BS_SPLITBUTTON,
+            300, 150, 40, 40, hwnd, (HMENU)301, g_hinst, 0);
+    if (!g_hwndTestDlgBut3) return FALSE;
+
+    g_hwndTestDlgBut4 = CreateWindowExA(WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR | WS_EX_NOPARENTNOTIFY,
+            "button", "Button &4", WS_CHILDWINDOW | WS_VISIBLE | WS_TABSTOP | BS_COMMANDLINK,
+            300, 200, 40, 40, hwnd, (HMENU)401, g_hinst, 0);
+    if (!g_hwndTestDlgBut4) return FALSE;
+
     return TRUE;
 }
 
@@ -607,6 +619,8 @@ static void test_WM_NEXTDLGCTL(void)
     HWND child1, child2, child3;
     MSG msg;
     DWORD dwVal;
+    ULONG_PTR ctx_cookie;
+    HANDLE hCtx;
 
     g_hwndTestDlg = CreateWindowExA( WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR
               | WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CONTROLPARENT | WS_EX_APPWINDOW,
@@ -614,12 +628,14 @@ static void test_WM_NEXTDLGCTL(void)
               "WM_NEXTDLGCTL Message test window",
               WS_POPUPWINDOW | WS_CLIPSIBLINGS | WS_DLGFRAME | WS_OVERLAPPED |
               WS_MINIMIZEBOX | WS_MAXIMIZEBOX | DS_3DLOOK | DS_SETFONT | DS_MODALFRAME,
-              0, 0, 235, 135,
+              0, 0, 400, 300,
               NULL, NULL, g_hinst, 0);
 
     assert (g_hwndTestDlg);
     assert (g_hwndTestDlgBut1);
     assert (g_hwndTestDlgBut2);
+    assert (g_hwndTestDlgBut3);
+    assert (g_hwndTestDlgBut4);
     assert (g_hwndTestDlgEdit);
 
     /*
@@ -656,6 +672,8 @@ static void test_WM_NEXTDLGCTL(void)
      */
     ok(get_button_style(g_hwndTestDlgBut1) == BS_DEFPUSHBUTTON, "Button1's style not set to BS_DEFPUSHBUTTON");
     ok(get_button_style(g_hwndTestDlgBut2) == BS_PUSHBUTTON, "Button2's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
 
     /* Move focus to Button2 using "WM_NEXTDLGCTL" */
     DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
@@ -671,6 +689,28 @@ static void test_WM_NEXTDLGCTL(void)
      */
     ok(get_button_style(g_hwndTestDlgBut1) == BS_PUSHBUTTON, "Button1's style not set to BS_PUSHBUTTON");
     ok(get_button_style(g_hwndTestDlgBut2) == BS_DEFPUSHBUTTON, "Button2's style not set to BS_DEFPUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
+
+    /* Move focus to Button3 using "WM_NEXTDLGCTL" */
+    DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
+    ok((GetFocus() == g_hwndTestDlgBut3), "Focus didn't move to the third button\n");
+    dwVal = DefDlgProcA(g_hwndTestDlg, DM_GETDEFID, 0, 0);
+    ok(IDCANCEL == (LOWORD(dwVal)), "WM_NEXTDLGCTL changed default button\n");
+    ok(get_button_style(g_hwndTestDlgBut1) == BS_PUSHBUTTON, "Button1's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut2) == BS_DEFPUSHBUTTON, "Button2's style not set to BS_DEFPUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
+
+    /* Move focus to Button4 using "WM_NEXTDLGCTL" */
+    DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
+    ok((GetFocus() == g_hwndTestDlgBut4), "Focus didn't move to the fourth button\n");
+    dwVal = DefDlgProcA(g_hwndTestDlg, DM_GETDEFID, 0, 0);
+    ok(IDCANCEL == (LOWORD(dwVal)), "WM_NEXTDLGCTL changed default button\n");
+    ok(get_button_style(g_hwndTestDlgBut1) == BS_PUSHBUTTON, "Button1's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut2) == BS_DEFPUSHBUTTON, "Button2's style not set to BS_DEFPUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
 
     /* Move focus to Edit control using "WM_NEXTDLGCTL" */
     DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
@@ -712,6 +752,64 @@ static void test_WM_NEXTDLGCTL(void)
     DestroyWindow(child2);
     DestroyWindow(child1);
     DestroyWindow(g_hwndTestDlg);
+
+    /* WM_NEXTDLGCTL with v6 common controls */
+    if (!load_v6_module(&ctx_cookie, &hCtx))
+        return;
+
+    g_hwndTestDlg = CreateWindowExA( WS_EX_LEFT | WS_EX_LTRREADING | WS_EX_RIGHTSCROLLBAR
+              | WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CONTROLPARENT | WS_EX_APPWINDOW,
+              "WM_NEXTDLGCTLWndClass", "WM_NEXTDLGCTL Message test window",
+              WS_POPUPWINDOW | WS_CLIPSIBLINGS | WS_DLGFRAME | WS_OVERLAPPED |
+              WS_MINIMIZEBOX | WS_MAXIMIZEBOX | DS_3DLOOK | DS_SETFONT | DS_MODALFRAME,
+              0, 0, 400, 300, NULL, NULL, g_hinst, 0);
+
+    assert(g_hwndTestDlg);
+    assert(g_hwndTestDlgBut1);
+    assert(g_hwndTestDlgBut2);
+    assert(g_hwndTestDlgBut3);
+    assert(g_hwndTestDlgBut4);
+
+    /* Set the focus first on edit control */
+    SetFocus(g_hwndTestDlgEdit);
+    ok((GetFocus() == g_hwndTestDlgEdit), "Focus didn't set on Edit control\n");
+
+    DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
+    ok((GetFocus() == g_hwndTestDlgBut1), "Focus didn't move to first button\n");
+    ok(get_button_style(g_hwndTestDlgBut1) == BS_DEFPUSHBUTTON, "Button1's style not set to BS_DEFPUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut2) == BS_PUSHBUTTON, "Button2's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
+
+    DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
+    ok((GetFocus() == g_hwndTestDlgBut2), "Focus didn't move to second button\n");
+    ok(get_button_style(g_hwndTestDlgBut1) == BS_PUSHBUTTON, "Button1's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut2) == BS_DEFPUSHBUTTON, "Button2's style not set to BS_DEFPUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
+
+    DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
+    ok((GetFocus() == g_hwndTestDlgBut3), "Focus didn't move to the third button\n");
+    ok(get_button_style(g_hwndTestDlgBut1) == BS_PUSHBUTTON, "Button1's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut2) == BS_PUSHBUTTON, "Button2's style not set to BS_PUSHBUTTON");
+    /* XP/2003 doesn't support common control v6 */
+    todo_wine ok(get_button_style(g_hwndTestDlgBut3) == BS_DEFSPLITBUTTON
+                 || broken(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON),
+                 "Button3's style not set to BS_DEFSPLITBUTTON\n");
+    ok(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK, "Button4's style not set to BS_COMMANDLINK\n");
+
+    DefDlgProcA(g_hwndTestDlg, WM_NEXTDLGCTL, 0, 0);
+    ok((GetFocus() == g_hwndTestDlgBut4), "Focus didn't move to the third button\n");
+    ok(get_button_style(g_hwndTestDlgBut1) == BS_PUSHBUTTON, "Button1's style not set to BS_PUSHBUTTON");
+    ok(get_button_style(g_hwndTestDlgBut2) == BS_PUSHBUTTON, "Button2's style not set to BS_PUSHBUTTON");
+    todo_wine ok(get_button_style(g_hwndTestDlgBut3) == BS_SPLITBUTTON, "Button3's style not set to BS_SPLITBUTTON\n");
+    /* XP/2003 doesn't support common control v6 */
+    todo_wine ok(get_button_style(g_hwndTestDlgBut4) == BS_DEFCOMMANDLINK
+                 || broken(get_button_style(g_hwndTestDlgBut4) == BS_COMMANDLINK),
+                 "Button4's style not set to BS_DEFCOMMANDLINK\n");
+
+    DestroyWindow(g_hwndTestDlg);
+    unload_v6_module(ctx_cookie, hCtx);
 }
 
 static LRESULT CALLBACK hook_proc(INT code, WPARAM wParam, LPARAM lParam)
