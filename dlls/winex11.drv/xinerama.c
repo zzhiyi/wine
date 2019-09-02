@@ -45,7 +45,6 @@ static MONITORINFOEXW default_monitor =
     MONITORINFOF_PRIMARY,       /* dwFlags */
     { '\\','\\','.','\\','D','I','S','P','L','A','Y','1',0 }   /* szDevice */
 };
-static const WCHAR monitor_deviceW[] = { '\\','\\','.','\\','D','I','S','P','L','A','Y','%','d',0 };
 
 static MONITORINFOEXW *monitors;
 static int nb_monitors;
@@ -144,8 +143,6 @@ static int query_screens(void)
     if (monitors != &default_monitor) HeapFree( GetProcessHeap(), 0, monitors );
     if ((monitors = HeapAlloc( GetProcessHeap(), 0, count * sizeof(*monitors) )))
     {
-        int device = 2; /* 1 is reserved for primary */
-
         nb_monitors = count;
         for (i = 0; i < nb_monitors; i++)
         {
@@ -160,12 +157,6 @@ static int query_screens(void)
         }
 
         get_primary()->dwFlags |= MONITORINFOF_PRIMARY;
-
-        for (i = 0; i < nb_monitors; i++)
-        {
-            snprintfW( monitors[i].szDevice, sizeof(monitors[i].szDevice) / sizeof(WCHAR),
-                       monitor_deviceW, (monitors[i].dwFlags & MONITORINFOF_PRIMARY) ? 1 : device++ );
-        }
 
         if(fs_hack_enabled()){
             POINT fs = fs_hack_current_mode();
