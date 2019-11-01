@@ -242,6 +242,12 @@ void X11DRV_DisplayDevices_SetHandler(const struct x11drv_display_device_handler
     }
 }
 
+void X11DRV_DisplayDevices_RegisterEventHandlers(void)
+{
+    if (handler.register_event_handlers)
+        handler.register_event_handlers();
+}
+
 /* This function sets device interface link state to enabled.
  * The link state should be set via IoSetDeviceInterfaceState(),
  * but IoSetDeviceInterfaceState() requires a PnP driver, which
