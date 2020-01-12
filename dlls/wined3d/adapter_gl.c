@@ -27,6 +27,9 @@
 #include <stdio.h>
 
 #include "wined3d_private.h"
+#include "initguid.h"
+#include "devguid.h"
+#include "setupapi.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 WINE_DECLARE_DEBUG_CHANNEL(d3d_perf);
@@ -1037,6 +1040,52 @@ static void quirk_no_independent_bit_depths(struct wined3d_gl_info *gl_info)
     gl_info->quirks |= WINED3D_QUIRK_NO_INDEPENDENT_BIT_DEPTHS;
 }
 
+static HANDLE get_display_device_init_mutex(void)
+{
+    static const WCHAR init_mutexW[] = {'d','i','s','p','l','a','y','_','d','e','v','i','c','e','_','i','n','i','t',0};
+    HANDLE mutex = CreateMutexW(NULL, FALSE, init_mutexW);
+
+    WaitForSingleObject(mutex, INFINITE);
+    return mutex;
+}
+
+static void release_display_device_init_mutex(HANDLE mutex)
+{
+    ReleaseMutex(mutex);
+    CloseHandle(mutex);
+}
+
+static BOOL setupapi_get_primary_gpu_pci_id(enum wined3d_pci_vendor *vendor, enum wined3d_pci_device *device)
+{
+    UINT vendor_id, device_id, subsystem_id, revision_id, id;
+    SP_DEVINFO_DATA device_data;
+    CHAR buffer[MAX_PATH];
+    HDEVINFO devinfo;
+    BOOL ret = FALSE;
+    HANDLE mutex;
+
+    mutex = get_display_device_init_mutex();
+    devinfo = SetupDiGetClassDevsA(&GUID_DEVCLASS_DISPLAY, "PCI", NULL, DIGCF_PRESENT);
+    device_data.cbSize = sizeof(device_data);
+    if (!SetupDiEnumDeviceInfo(devinfo, 0, &device_data))
+        goto done;
+
+    if (!SetupDiGetDeviceInstanceIdA(devinfo, &device_data, buffer, ARRAY_SIZE(buffer), NULL))
+        goto done;
+
+    if (sscanf(buffer, "PCI\\VEN_%04X&DEV_%04X&SUBSYS_%08X&REV_%02X\\%08X",
+            &vendor_id, &device_id, &subsystem_id, &revision_id, &id) != 5)
+        goto done;
+
+    *vendor = vendor_id;
+    *device = device_id;
+    ret = TRUE;
+done:
+    SetupDiDestroyDeviceInfoList(devinfo);
+    release_display_device_init_mutex(mutex);
+    return ret;
+}
+
 static const struct wined3d_gpu_description *query_gpu_description(const struct wined3d_gl_info *gl_info,
         UINT64 *vram_bytes)
 {
@@ -1044,6 +1093,8 @@ static const struct wined3d_gpu_description *query_gpu_description(const struct 
     enum wined3d_pci_vendor vendor = PCI_VENDOR_NONE;
     enum wined3d_pci_device device = PCI_DEVICE_NONE;
     GLuint value;
+
+    *vram_bytes = 0;
 
     if (gl_info->supported[WGL_WINE_QUERY_RENDERER])
     {
@@ -1059,7 +1110,8 @@ static const struct wined3d_gpu_description *query_gpu_description(const struct 
 
         gpu_description = wined3d_get_gpu_description(vendor, device);
     }
-    else if (gl_info->supported[NVX_GPU_MEMORY_INFO])
+
+    if (!*vram_bytes && gl_info->supported[NVX_GPU_MEMORY_INFO])
     {
         GLint vram_kb;
         gl_info->gl_ops.gl.p_glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &vram_kb);
@@ -1067,7 +1119,12 @@ static const struct wined3d_gpu_description *query_gpu_description(const struct 
         *vram_bytes = (UINT64)vram_kb * 1024;
         TRACE("Got 0x%s as video memory from NVX_GPU_MEMORY_INFO extension.\n",
                 wine_dbgstr_longlong(*vram_bytes));
+    }
 
+    /* HACK: Get correct PCI IDs when WGL_WINE_QUERY_RENDERER is unsupported on, e.g., Nvidia proprietary drivers */
+    if (!gpu_description && setupapi_get_primary_gpu_pci_id(&vendor, &device))
+    {
+        TRACE("Card reports vendor PCI ID 0x%04x, device PCI ID 0x%04x via SetupAPI.\n", vendor, device);
         gpu_description = wined3d_get_gpu_description(vendor, device);
     }
 
