@@ -38,6 +38,8 @@
 #include "wine/unicode.h"
 #include "x11drv.h"
 
+#include "dxvk/dxvk.h"
+
 WINE_DEFAULT_DEBUG_CHANNEL(x11drv);
 
 /* Wine specific monitor properties */
@@ -45,6 +47,12 @@ DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCWORK, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 4);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 5);
+
+/* Dxvk custom PCI ID support */
+#define HW_VENDOR_NVIDIA        0x10de
+#define HW_VENDOR_AMD           0x1002
+
+#define CARD_AMD_RADEON_RX_480  0x67df
 
 static const WCHAR driver_date_dataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
 static const WCHAR driver_descW[] = {'D','r','i','v','e','r','D','e','s','c',0};
@@ -613,6 +621,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
     DWORD disposition = 0;
     WCHAR guidW[40];
     WCHAR driverW[1024];
+    struct DXVKOptions dxvk_opts;
 
     mutex = get_display_device_init_mutex();
 
@@ -639,8 +648,28 @@ void X11DRV_DisplayDevices_Init(BOOL force)
         goto done;
     TRACE("GPU count: %d\n", gpu_count);
 
+    dxvk_get_options(&dxvk_opts);
+    TRACE("got dxvk options:\n");
+    TRACE("\tnvapiHack: %u\n", dxvk_opts.nvapiHack);
+    TRACE("\tcustomVendorId: 0x%04x\n", dxvk_opts.customVendorId);
+    TRACE("\tcustomDeviceId: 0x%04x\n", dxvk_opts.customDeviceId);
+
     for (gpu = 0; gpu < gpu_count; gpu++)
     {
+        /* logic from dxvk/src/dxgi/dxgi_adapter.cpp:DxgiAdapter::GetDesc2 */
+        if (dxvk_opts.customVendorId >= 0)
+            gpus[gpu].vendor_id = dxvk_opts.customVendorId;
+
+        if (dxvk_opts.customDeviceId >= 0)
+            gpus[gpu].device_id = dxvk_opts.customDeviceId;
+
+        if (dxvk_opts.customVendorId < 0 && dxvk_opts.customDeviceId < 0 &&
+                dxvk_opts.nvapiHack && gpus[gpu].vendor_id == HW_VENDOR_NVIDIA) {
+            TRACE("NvAPI workaround enabled, reporting AMD GPU\n");
+            gpus[gpu].vendor_id = HW_VENDOR_AMD;
+            gpus[gpu].device_id = CARD_AMD_RADEON_RX_480;
+        }
+
         if (!X11DRV_InitGpu(gpu_devinfo, &gpus[gpu], gpu, guidW, driverW))
             goto done;
 
