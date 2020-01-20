@@ -262,7 +262,7 @@ HRESULT CDECL wined3d_swapchain_get_raster_status(const struct wined3d_swapchain
 {
     TRACE("swapchain %p, raster_status %p.\n", swapchain, raster_status);
 
-    return wined3d_get_adapter_raster_status(swapchain->device->wined3d,
+    return wined3d_output_get_raster_status(swapchain->device->wined3d,
             swapchain->device->adapter->ordinal, raster_status);
 }
 
