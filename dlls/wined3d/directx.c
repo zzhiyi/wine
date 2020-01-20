@@ -1599,7 +1599,7 @@ HRESULT CDECL wined3d_adapter_check_depth_stencil_match(const struct wined3d *wi
     return WINED3DERR_NOTAVAILABLE;
 }
 
-HRESULT CDECL wined3d_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
+HRESULT CDECL wined3d_adapter_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id surface_format_id, BOOL windowed,
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels)
 {

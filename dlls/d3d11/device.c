@@ -3539,7 +3539,7 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CheckMultisampleQualityLevels(ID3D
     wined3d_mutex_lock();
     wined3d = wined3d_device_get_wined3d(device->wined3d_device);
     wined3d_device_get_creation_parameters(device->wined3d_device, &params);
-    hr = wined3d_check_device_multisample_type(wined3d, params.adapter_idx, params.device_type,
+    hr = wined3d_adapter_check_device_multisample_type(wined3d, params.adapter_idx, params.device_type,
             wined3dformat_from_dxgi_format(format), TRUE, sample_count, quality_level_count);
     wined3d_mutex_unlock();
 

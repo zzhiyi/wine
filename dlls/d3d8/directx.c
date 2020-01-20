@@ -303,7 +303,7 @@ static HRESULT WINAPI d3d8_CheckDeviceMultiSampleType(IDirect3D8 *iface, UINT ad
         wined3d_mutex_unlock();
         return hr;
     }
-    hr = wined3d_check_device_multisample_type(d3d8->wined3d, wined3d_adapter, device_type,
+    hr = wined3d_adapter_check_device_multisample_type(d3d8->wined3d, wined3d_adapter, device_type,
             wined3dformat_from_d3dformat(format), windowed,
             (enum wined3d_multisample_type)multisample_type, NULL);
     wined3d_mutex_unlock();
