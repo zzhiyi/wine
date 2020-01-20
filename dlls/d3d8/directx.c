@@ -98,7 +98,7 @@ static UINT WINAPI d3d8_GetAdapterCount(IDirect3D8 *iface)
     TRACE("iface %p.\n", iface);
 
     wined3d_mutex_lock();
-    count = wined3d_get_adapter_count(d3d8->wined3d);
+    count = wined3d_get_output_count(d3d8->wined3d);
     wined3d_mutex_unlock();
 
     return count;
