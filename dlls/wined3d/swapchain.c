@@ -763,15 +763,47 @@ static enum wined3d_format_id adapter_format_from_backbuffer_format(const struct
     return pixelformat_for_depth(backbuffer_format->byte_count * CHAR_BIT);
 }
 
+static HRESULT wined3d_find_output_by_window(struct wined3d *wined3d, HWND hwnd, struct wined3d_output **output)
+{
+    MONITORINFOEXW monitor_info = {sizeof(monitor_info)};
+    HMONITOR monitor;
+    DWORD i;
+
+    if (!(monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)) ||
+            !GetMonitorInfoW(monitor, (MONITORINFO *)&monitor_info))
+    {
+        WARN("Failed to get monitor from window.\n");
+        return WINED3DERR_INVALIDCALL;
+    }
+
+    for (i = 0; i < wined3d->output_count; ++i)
+    {
+        if (!lstrcmpiW(wined3d->outputs[i].device_name, monitor_info.szDevice))
+        {
+            *output = &wined3d->outputs[i];
+            return WINED3D_OK;
+        }
+    }
+
+    return WINED3DERR_INVALIDCALL;
+}
+
 static HRESULT wined3d_swapchain_state_init(struct wined3d_swapchain_state *state,
         const struct wined3d_swapchain_desc *desc, HWND window,
         struct wined3d *wined3d, unsigned int adapter_idx)
 {
+    struct wined3d_output *output;
     HRESULT hr;
 
     state->desc = *desc;
 
-    if (FAILED(hr = wined3d_output_get_display_mode(wined3d, adapter_idx, &state->original_mode, NULL)))
+    if (FAILED(hr = wined3d_find_output_by_window(wined3d, window, &output)))
+    {
+        ERR("Failed to get output, hr %#x.\n", hr);
+        return hr;
+    }
+
+    if (FAILED(hr = wined3d_output_get_display_mode(wined3d, output->ordinal, &state->original_mode, NULL)))
     {
         ERR("Failed to get current display mode, hr %#x.\n", hr);
         return hr;
