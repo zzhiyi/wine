@@ -949,35 +949,43 @@ HRESULT CDECL wined3d_register_software_device(struct wined3d *wined3d, void *in
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int adapter_idx,
+static BOOL CALLBACK enum_monitor_proc(HMONITOR monitor, HDC hdc, RECT *rect, LPARAM lparam)
+{
+    struct wined3d_output_desc *desc = (struct wined3d_output_desc *)lparam;
+    MONITORINFOEXW monitor_info = {sizeof(monitor_info)};
+
+    if (GetMonitorInfoW(monitor, (MONITORINFO *)&monitor_info) && !lstrcmpiW(desc->device_name, monitor_info.szDevice))
+    {
+        desc->monitor = monitor;
+        desc->desktop_rect = monitor_info.rcMonitor;
+        desc->attached_to_desktop = TRUE;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+HRESULT CDECL wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int output_idx,
         struct wined3d_output_desc *desc)
 {
-    enum wined3d_display_rotation rotation;
-    const struct wined3d_adapter *adapter;
+    struct wined3d_output *output;
     struct wined3d_display_mode mode;
-    HMONITOR monitor;
     HRESULT hr;
 
-    TRACE("wined3d %p, adapter_idx %u, desc %p.\n", wined3d, adapter_idx, desc);
+    TRACE("wined3d %p, output_idx %u, desc %p.\n", wined3d, output_idx, desc);
 
-    if (adapter_idx >= wined3d->adapter_count)
+    if (output_idx >= wined3d->output_count)
         return WINED3DERR_INVALIDCALL;
 
-    adapter = wined3d->adapters[adapter_idx];
-    if (!(monitor = MonitorFromPoint(adapter->monitor_position, MONITOR_DEFAULTTOPRIMARY)))
+    output = &wined3d->outputs[output_idx];
+    memset(desc, 0, sizeof(*desc));
+    lstrcpyW(desc->device_name, output->device_name);
+    EnumDisplayMonitors(NULL, NULL, enum_monitor_proc, (LPARAM)desc);
+    if (!desc->monitor)
         return WINED3DERR_INVALIDCALL;
 
-    if (FAILED(hr = wined3d_output_get_display_mode(wined3d, adapter_idx, &mode, &rotation)))
+    if (FAILED(hr = wined3d_output_get_display_mode(wined3d, output_idx, &mode, &desc->rotation)))
         return hr;
-
-    memcpy(desc->device_name, adapter->device_name, sizeof(desc->device_name));
-    SetRect(&desc->desktop_rect, 0, 0, mode.width, mode.height);
-    OffsetRect(&desc->desktop_rect, adapter->monitor_position.x, adapter->monitor_position.y);
-    /* FIXME: We should get this from EnumDisplayDevices() when the adapters
-     * are created. */
-    desc->attached_to_desktop = TRUE;
-    desc->rotation = rotation;
-    desc->monitor = monitor;
 
     return WINED3D_OK;
 }
