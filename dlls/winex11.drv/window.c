@@ -345,6 +345,32 @@ static inline BOOL is_window_resizable( struct x11drv_win_data *data, DWORD styl
     return is_window_rect_fullscreen( &data->whole_rect );
 }
 
+struct fullscreen_info
+{
+    const RECT *rect;
+    BOOL fullscreen;
+};
+
+static BOOL CALLBACK enum_monitor_proc( HMONITOR monitor, HDC hdc, RECT *monitor_rect, LPARAM lparam )
+{
+    struct fullscreen_info *info = (struct fullscreen_info *)lparam;
+
+    if (EqualRect(monitor_rect, info->rect))
+    {
+        info->fullscreen = TRUE;
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+BOOL is_window_rect_fullscreen( const RECT *rect )
+{
+    struct fullscreen_info info = {rect, FALSE};
+
+    EnumDisplayMonitors( NULL, NULL, enum_monitor_proc, (LPARAM)&info );
+    return info.fullscreen;
+}
 
 /***********************************************************************
  *              get_mwm_decorations
