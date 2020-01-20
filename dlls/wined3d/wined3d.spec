@@ -4,7 +4,6 @@
 @ cdecl wined3d_calculate_format_pitch(ptr long long long)
 @ cdecl wined3d_check_depth_stencil_match(ptr long long long long long)
 @ cdecl wined3d_check_device_format(ptr long long long long long long long)
-@ cdecl wined3d_check_device_format_conversion(ptr long long long long)
 @ cdecl wined3d_check_device_multisample_type(ptr long long long long long ptr)
 @ cdecl wined3d_check_device_type(ptr long long long long long)
 @ cdecl wined3d_create(long)
@@ -188,6 +187,7 @@
 @ cdecl wined3d_device_update_texture(ptr ptr ptr)
 @ cdecl wined3d_device_validate_device(ptr ptr)
 
+@ cdecl wined3d_output_check_device_format_conversion(ptr long long long long)
 @ cdecl wined3d_output_enum_modes(ptr long long long long ptr)
 @ cdecl wined3d_output_find_closest_matching_mode(ptr long ptr)
 @ cdecl wined3d_output_get_display_mode(ptr long ptr ptr)

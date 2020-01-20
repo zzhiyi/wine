@@ -2243,9 +2243,6 @@ HRESULT __cdecl wined3d_check_depth_stencil_match(const struct wined3d *wined3d,
 HRESULT __cdecl wined3d_check_device_format(const struct wined3d *wined3d, UINT adaper_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id adapter_format_id, DWORD usage,
         unsigned int bind_flags, enum wined3d_resource_type resource_type, enum wined3d_format_id check_format_id);
-HRESULT __cdecl wined3d_check_device_format_conversion(const struct wined3d *wined3d, UINT adapter_idx,
-        enum wined3d_device_type device_type, enum wined3d_format_id source_format_id,
-        enum wined3d_format_id target_format_id);
 HRESULT __cdecl wined3d_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id surface_format_id, BOOL windowed,
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels);
@@ -2539,6 +2536,9 @@ HRESULT __cdecl wined3d_device_update_texture(struct wined3d_device *device,
         struct wined3d_texture *src_texture, struct wined3d_texture *dst_texture);
 HRESULT __cdecl wined3d_device_validate_device(const struct wined3d_device *device, DWORD *num_passes);
 
+HRESULT __cdecl wined3d_output_check_device_format_conversion(const struct wined3d *wined3d, UINT output_idx,
+        enum wined3d_device_type device_type, enum wined3d_format_id source_format_id,
+        enum wined3d_format_id target_format_id);
 HRESULT __cdecl wined3d_output_enum_modes(const struct wined3d *wined3d, UINT output_idx,
         enum wined3d_format_id format_id, enum wined3d_scanline_ordering scanline_ordering,
         UINT mode_idx, struct wined3d_display_mode *mode);

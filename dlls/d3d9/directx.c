@@ -346,7 +346,7 @@ static HRESULT WINAPI d3d9_CheckDeviceFormatConversion(IDirect3D9Ex *iface, UINT
             iface, adapter, device_type, src_format, dst_format);
 
     wined3d_mutex_lock();
-    hr = wined3d_check_device_format_conversion(d3d9->wined3d, adapter, device_type,
+    hr = wined3d_output_check_device_format_conversion(d3d9->wined3d, adapter, device_type,
             wined3dformat_from_d3dformat(src_format), wined3dformat_from_d3dformat(dst_format));
     wined3d_mutex_unlock();
 
