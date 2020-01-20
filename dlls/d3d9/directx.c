@@ -113,7 +113,7 @@ static UINT WINAPI d3d9_GetAdapterCount(IDirect3D9Ex *iface)
     TRACE("iface %p.\n", iface);
 
     wined3d_mutex_lock();
-    ret = wined3d_get_adapter_count(d3d9->wined3d);
+    ret = wined3d_get_output_count(d3d9->wined3d);
     wined3d_mutex_unlock();
 
     return ret;

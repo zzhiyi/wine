@@ -2270,6 +2270,7 @@ HRESULT __cdecl wined3d_get_adapter_raster_status(const struct wined3d *wined3d,
         struct wined3d_raster_status *raster_status);
 HRESULT __cdecl wined3d_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
         enum wined3d_device_type device_type, struct wined3d_caps *caps);
+UINT __cdecl wined3d_get_output_count(const struct wined3d *wined3d);
 HRESULT __cdecl wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int adapter_idx,
         struct wined3d_output_desc *desc);
 ULONG __cdecl wined3d_incref(struct wined3d *wined3d);
