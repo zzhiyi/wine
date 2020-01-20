@@ -2261,8 +2261,6 @@ HRESULT __cdecl wined3d_get_adapter_display_mode(const struct wined3d *wined3d, 
         struct wined3d_display_mode *mode, enum wined3d_display_rotation *rotation);
 HRESULT __cdecl wined3d_get_adapter_identifier(const struct wined3d *wined3d, UINT adapter_idx,
         DWORD flags, struct wined3d_adapter_identifier *identifier);
-UINT __cdecl wined3d_get_adapter_mode_count(const struct wined3d *wined3d, UINT adapter_idx,
-        enum wined3d_format_id format_id, enum wined3d_scanline_ordering scanline_ordering);
 struct wined3d_output * __cdecl wined3d_get_adapter_output(const struct wined3d *wined3d, unsigned int adapter_idx);
 HRESULT __cdecl wined3d_get_adapter_raster_status(const struct wined3d *wined3d, UINT adapter_idx,
         struct wined3d_raster_status *raster_status);
@@ -2552,6 +2550,8 @@ HRESULT __cdecl wined3d_device_validate_device(const struct wined3d_device *devi
 HRESULT __cdecl wined3d_output_enum_modes(const struct wined3d *wined3d, UINT output_idx,
         enum wined3d_format_id format_id, enum wined3d_scanline_ordering scanline_ordering,
         UINT mode_idx, struct wined3d_display_mode *mode);
+UINT __cdecl wined3d_output_get_mode_count(const struct wined3d *wined3d, UINT output_idx,
+        enum wined3d_format_id format_id, enum wined3d_scanline_ordering scanline_ordering);
 void __cdecl wined3d_output_release_ownership(const struct wined3d_output *output);
 HRESULT __cdecl wined3d_output_take_ownership(const struct wined3d_output *output, BOOL exclusive);
 
