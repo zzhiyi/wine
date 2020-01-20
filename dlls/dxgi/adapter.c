@@ -124,6 +124,7 @@ static HRESULT STDMETHODCALLTYPE dxgi_adapter_EnumOutputs(IWineDXGIAdapter *ifac
 {
     struct dxgi_adapter *adapter = impl_from_IWineDXGIAdapter(iface);
     struct dxgi_output *output_object;
+    UINT output_count;
     HRESULT hr;
 
     TRACE("iface %p, output_idx %u, output %p.\n", iface, output_idx, output);
@@ -131,7 +132,8 @@ static HRESULT STDMETHODCALLTYPE dxgi_adapter_EnumOutputs(IWineDXGIAdapter *ifac
     if (!output)
         return E_INVALIDARG;
 
-    if (output_idx > 0)
+    hr = wined3d_adapter_get_output_count(adapter->factory->wined3d, adapter->ordinal, &output_count);
+    if (FAILED(hr) || output_idx >= output_count)
     {
         *output = NULL;
         return DXGI_ERROR_NOT_FOUND;

@@ -898,6 +898,18 @@ UINT CDECL wined3d_get_output_count(const struct wined3d *wined3d)
     return wined3d->output_count;
 }
 
+HRESULT CDECL wined3d_adapter_get_output_count(const struct wined3d *wined3d, UINT adapter_idx, UINT *count)
+{
+    TRACE("wined3d %p, adapter_idx %u, count %p.\n", wined3d, adapter_idx, count);
+
+    if (adapter_idx >= wined3d->adapter_count)
+        return WINED3DERR_INVALIDCALL;
+
+    *count = wined3d->adapters[adapter_idx]->output_count;
+    TRACE("reporting %u outputs for adapter %u.\n", *count, adapter_idx);
+    return WINED3D_OK;
+}
+
 HRESULT CDECL wined3d_register_software_device(struct wined3d *wined3d, void *init_function)
 {
     FIXME("wined3d %p, init_function %p stub!\n", wined3d, init_function);
