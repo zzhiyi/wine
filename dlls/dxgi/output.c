@@ -123,7 +123,7 @@ static HRESULT dxgi_output_get_display_mode_list(struct dxgi_output *output,
 
     wined3d_mutex_lock();
     wined3d = output->adapter->factory->wined3d;
-    max_count = wined3d_get_adapter_mode_count(wined3d, output->adapter->ordinal,
+    max_count = wined3d_output_get_mode_count(wined3d, output->wined3d_output_ordinal,
             wined3d_format, WINED3D_SCANLINE_ORDERING_UNKNOWN);
 
     if (!modes)

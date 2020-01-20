@@ -143,7 +143,7 @@ static UINT WINAPI d3d8_GetAdapterModeCount(IDirect3D8 *iface, UINT adapter)
     TRACE("iface %p, adapter %u.\n", iface, adapter);
 
     wined3d_mutex_lock();
-    count = wined3d_get_adapter_mode_count(d3d8->wined3d, adapter,
+    count = wined3d_output_get_mode_count(d3d8->wined3d, adapter,
             WINED3DFMT_UNKNOWN, WINED3D_SCANLINE_ORDERING_UNKNOWN);
     wined3d_mutex_unlock();
 
