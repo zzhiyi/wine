@@ -5137,6 +5137,7 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     struct wined3d_rendertarget_view *view;
     struct wined3d_swapchain *swapchain;
     struct wined3d_view_desc view_desc;
+    struct wined3d_output *output;
     BOOL backbuffer_resized, windowed;
     HRESULT hr = WINED3D_OK;
     unsigned int i;
@@ -5246,8 +5247,10 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
                 return hr;
             }
         }
+        if (FAILED(hr = wined3d_swapchain_get_output(swapchain, &output)))
+            return hr;
         if (FAILED(hr = wined3d_swapchain_state_set_fullscreen(&swapchain->state,
-                swapchain_desc, device->wined3d, device->adapter->ordinal, mode)))
+                swapchain_desc, device->wined3d, output->ordinal, mode)))
             return hr;
 
         /* Switch from fullscreen to windowed. */

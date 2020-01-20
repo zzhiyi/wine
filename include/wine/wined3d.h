@@ -2790,6 +2790,7 @@ HRESULT __cdecl wined3d_swapchain_get_gamma_ramp(const struct wined3d_swapchain 
 void * __cdecl wined3d_swapchain_get_parent(const struct wined3d_swapchain *swapchain);
 void __cdecl wined3d_swapchain_get_desc(const struct wined3d_swapchain *swapchain,
         struct wined3d_swapchain_desc *desc);
+HRESULT __cdecl wined3d_swapchain_get_output(const struct wined3d_swapchain *swapchain, struct wined3d_output **output);
 HRESULT __cdecl wined3d_swapchain_get_raster_status(const struct wined3d_swapchain *swapchain,
         struct wined3d_raster_status *raster_status);
 struct wined3d_swapchain_state * __cdecl wined3d_swapchain_get_state(struct wined3d_swapchain *swapchain);

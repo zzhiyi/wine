@@ -303,6 +303,7 @@
 @ cdecl wined3d_swapchain_get_gamma_ramp(ptr ptr)
 @ cdecl wined3d_swapchain_get_parent(ptr)
 @ cdecl wined3d_swapchain_get_desc(ptr ptr)
+@ cdecl wined3d_swapchain_get_output(ptr ptr)
 @ cdecl wined3d_swapchain_get_raster_status(ptr ptr)
 @ cdecl wined3d_swapchain_get_state(ptr)
 @ cdecl wined3d_swapchain_incref(ptr)
