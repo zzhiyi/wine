@@ -4927,7 +4927,7 @@ static struct wined3d_texture *wined3d_device_create_cursor_texture(struct wined
     return texture;
 }
 
-HRESULT CDECL wined3d_device_set_cursor_properties(struct wined3d_device *device,
+HRESULT CDECL wined3d_device_set_cursor_properties(struct wined3d_device *device, UINT output_idx,
         UINT x_hotspot, UINT y_hotspot, struct wined3d_texture *texture, unsigned int sub_resource_idx)
 {
     unsigned int texture_level = sub_resource_idx % texture->level_count;
@@ -4956,7 +4956,7 @@ HRESULT CDECL wined3d_device_set_cursor_properties(struct wined3d_device *device
         return WINED3DERR_INVALIDCALL;
     }
 
-    if (FAILED(hr = wined3d_output_get_display_mode(device->wined3d, device->adapter->ordinal, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(device->wined3d, output_idx, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         return WINED3DERR_INVALIDCALL;

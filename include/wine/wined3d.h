@@ -2444,7 +2444,7 @@ void __cdecl wined3d_device_set_cs_uav(struct wined3d_device *device, unsigned i
         struct wined3d_unordered_access_view *uav, unsigned int initial_count);
 void __cdecl wined3d_device_set_cursor_position(struct wined3d_device *device,
         int x_screen_space, int y_screen_space, DWORD flags);
-HRESULT __cdecl wined3d_device_set_cursor_properties(struct wined3d_device *device,
+HRESULT __cdecl wined3d_device_set_cursor_properties(struct wined3d_device *device, UINT output_idx,
         UINT x_hotspot, UINT y_hotspot, struct wined3d_texture *texture, unsigned int sub_resource_idx);
 HRESULT __cdecl wined3d_device_set_depth_stencil_view(struct wined3d_device *device,
         struct wined3d_rendertarget_view *view);
