@@ -185,7 +185,7 @@ static HRESULT WINAPI d3d8_GetAdapterDisplayMode(IDirect3D8 *iface, UINT adapter
             iface, adapter, mode);
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_display_mode(d3d8->wined3d, adapter, &wined3d_mode, NULL);
+    hr = wined3d_output_get_display_mode(d3d8->wined3d, adapter, &wined3d_mode, NULL);
     wined3d_mutex_unlock();
 
     if (SUCCEEDED(hr))

@@ -556,7 +556,7 @@ static HRESULT ddraw_attach_d3d_device(struct ddraw *ddraw, HWND window,
 
     TRACE("ddraw %p.\n", ddraw);
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode, NULL)))
     {
         ERR("Failed to get display mode.\n");
         return hr;
@@ -683,7 +683,7 @@ static HRESULT WINAPI ddraw7_RestoreDisplayMode(IDirectDraw7 *iface)
         return DDERR_NOEXCLUSIVEMODE;
     }
 
-    if (SUCCEEDED(hr = wined3d_set_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, NULL)))
+    if (SUCCEEDED(hr = wined3d_output_set_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, NULL)))
         ddraw->flags &= ~DDRAW_RESTORE_MODE;
 
     InterlockedCompareExchange(&ddraw->device_state, DDRAW_DEVICE_STATE_NOT_RESTORED, DDRAW_DEVICE_STATE_OK);
@@ -1104,7 +1104,7 @@ static HRESULT WINAPI ddraw7_SetDisplayMode(IDirectDraw7 *iface, DWORD width, DW
 
     /* TODO: The possible return values from msdn suggest that the screen mode
      * can't be changed if a surface is locked or some drawing is in progress. */
-    if (SUCCEEDED(hr = wined3d_set_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode)))
+    if (SUCCEEDED(hr = wined3d_output_set_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode)))
     {
         if (ddraw->primary)
         {
@@ -1617,7 +1617,7 @@ static HRESULT WINAPI ddraw7_GetDisplayMode(IDirectDraw7 *iface, DDSURFACEDESC2 
 
     wined3d_mutex_lock();
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         wined3d_mutex_unlock();
@@ -1710,7 +1710,7 @@ static HRESULT WINAPI ddraw7_GetFourCCCodes(IDirectDraw7 *iface, DWORD *NumCodes
 
     TRACE("iface %p, codes_count %p, codes %p.\n", iface, NumCodes, Codes);
 
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         return hr;
@@ -1772,7 +1772,7 @@ static HRESULT WINAPI ddraw7_GetMonitorFrequency(IDirectDraw7 *iface, DWORD *fre
     TRACE("iface %p, frequency %p.\n", iface, frequency);
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL);
+    hr = wined3d_output_get_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode, NULL);
     wined3d_mutex_unlock();
     if (FAILED(hr))
     {
@@ -1907,7 +1907,7 @@ static HRESULT WINAPI ddraw7_GetAvailableVidMem(IDirectDraw7 *iface, DDSCAPS2 *c
     /* Some applications (e.g. 3DMark 2000) assume that the reported amount of
      * video memory doesn't include the memory used by the default framebuffer.
      */
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode, NULL)))
     {
         WARN("Failed to get display mode, hr %#x.\n", hr);
         wined3d_mutex_unlock();
@@ -4432,7 +4432,7 @@ static HRESULT WINAPI d3d7_EnumZBufferFormats(IDirect3D7 *iface, REFCLSID device
      * not like that we'll have to find some workaround, like iterating over
      * all imaginable formats and collecting all the depth stencil formats we
      * can get. */
-    if (FAILED(hr = wined3d_get_adapter_display_mode(ddraw->wined3d, WINED3DADAPTER_DEFAULT, &mode, NULL)))
+    if (FAILED(hr = wined3d_output_get_display_mode(ddraw->wined3d, WINED3DOUTPUT_DEFAULT, &mode, NULL)))
     {
         ERR("Failed to get display mode, hr %#x.\n", hr);
         wined3d_mutex_unlock();
