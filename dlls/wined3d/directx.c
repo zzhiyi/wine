@@ -63,6 +63,16 @@ const GLenum magLookup[] =
     GL_NEAREST, GL_NEAREST, GL_LINEAR,
 };
 
+/* Retrieve the ordinal of the adapter a wined3d output belongs to */
+HRESULT CDECL wined3d_output_get_adapter_ordinal(const struct wined3d *wined3d, UINT output_idx, UINT *ordinal)
+{
+    if (output_idx >= wined3d->output_count)
+        return WINED3DERR_INVALIDCALL;
+
+    *ordinal = wined3d->outputs[output_idx].adapter->ordinal;
+    return WINED3D_OK;
+}
+
 /* Retrieve an ordinal to uniquely identify an output within a wined3d instance.
  * output_idx here is the output index within an adapter, rather than in wined3d instance */
 HRESULT CDECL wined3d_adapter_get_output_ordinal(const struct wined3d *wined3d, UINT adapter_idx, UINT output_idx,
