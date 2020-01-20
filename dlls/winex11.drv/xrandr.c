@@ -530,6 +530,26 @@ static XRRCrtcInfo *xrandr12_get_primary_crtc_info( XRRScreenResources *resource
     return NULL;
 }
 
+static DWORD get_frequency( const XRRModeInfo *mode )
+{
+    if (mode->hTotal && mode->vTotal)
+    {
+        double v_total = mode->vTotal;
+
+        if (mode->modeFlags & RR_DoubleScan)
+            v_total *= 2;
+        if (mode->modeFlags & RR_Interlace)
+            v_total /= 2;
+
+        /* Adding 0.05 instead of 0.5 to round so that common frequencies like
+         * 59.94Hz and 23.976Hz become 59Hz and 24Hz. Using 0.5 would make
+         * 59.94Hz become 60Hz and would make it seem like there are two 60Hz modes */
+        return mode->dotClock / (mode->hTotal * v_total) + 0.05;
+    }
+
+    return 0;
+}
+
 static int xrandr12_init_modes(void)
 {
     unsigned int only_one_resolution = 1, mode_count;
@@ -588,8 +608,7 @@ static int xrandr12_init_modes(void)
 
             if (mode->id == output_info->modes[i])
             {
-                unsigned int dots = mode->hTotal * mode->vTotal;
-                unsigned int refresh = dots ? (mode->dotClock + dots / 2) / dots : 0;
+                unsigned int refresh = get_frequency(mode);
 
                 TRACE("Adding mode %#lx: %ux%u@%u.\n", mode->id, mode->width, mode->height, refresh);
                 X11DRV_Settings_AddOneMode( mode->width, mode->height, 0, refresh );
