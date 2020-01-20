@@ -2544,6 +2544,7 @@ HRESULT __cdecl wined3d_output_enum_modes(const struct wined3d *wined3d, UINT ou
         UINT mode_idx, struct wined3d_display_mode *mode);
 HRESULT __cdecl wined3d_output_find_closest_matching_mode(const struct wined3d *wined3d,
         unsigned int output_idx, struct wined3d_display_mode *mode);
+HRESULT __cdecl wined3d_output_get_adapter_ordinal(const struct wined3d *wined3d, UINT output_idx, UINT *ordinal);
 HRESULT __cdecl wined3d_output_get_display_mode(const struct wined3d *wined3d, UINT output_idx,
         struct wined3d_display_mode *mode, enum wined3d_display_rotation *rotation);
 UINT __cdecl wined3d_output_get_mode_count(const struct wined3d *wined3d, UINT output_idx,

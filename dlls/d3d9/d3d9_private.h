@@ -87,6 +87,7 @@ struct d3d9_device
     struct wined3d_device_parent device_parent;
     LONG refcount;
     struct wined3d_device *wined3d_device;
+    UINT wined3d_output_ordinal;
     struct d3d9 *d3d_parent;
 
     struct fvf_declaration *fvf_decls;

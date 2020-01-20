@@ -124,6 +124,7 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     struct wined3d_adapter_identifier adapter_id;
+    UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, flags %#x, identifier %p.\n",
@@ -136,7 +137,10 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
     adapter_id.device_name = identifier->DeviceName;
     adapter_id.device_name_size = sizeof(identifier->DeviceName);
 
-    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(d3d9->wined3d, adapter, flags, &adapter_id)))
+    if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
+        return hr;
+
+    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(d3d9->wined3d, wined3d_adapter, flags, &adapter_id)))
     {
         identifier->DriverVersion = adapter_id.driver_version;
         identifier->VendorId = adapter_id.vendor_id;
@@ -248,6 +252,7 @@ static HRESULT WINAPI d3d9_CheckDeviceFormat(IDirect3D9Ex *iface, UINT adapter, 
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     enum wined3d_resource_type wined3d_rtype;
     unsigned int bind_flags;
+    UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, device_type %#x, adapter_format %#x, usage %#x, resource_type %#x, format %#x.\n",
@@ -289,8 +294,15 @@ static HRESULT WINAPI d3d9_CheckDeviceFormat(IDirect3D9Ex *iface, UINT adapter, 
     }
 
     wined3d_mutex_lock();
-    hr = wined3d_check_device_format(d3d9->wined3d, adapter, device_type, wined3dformat_from_d3dformat(adapter_format),
-            usage, bind_flags, wined3d_rtype, wined3dformat_from_d3dformat(format));
+    if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
+    {
+        WARN("Failed to get adapter ordinal, hr %#x.\n", hr);
+        wined3d_mutex_unlock();
+        return hr;
+    }
+    hr = wined3d_check_device_format(d3d9->wined3d, wined3d_adapter, device_type,
+            wined3dformat_from_d3dformat(adapter_format), usage, bind_flags, wined3d_rtype,
+            wined3dformat_from_d3dformat(format));
     wined3d_mutex_unlock();
 
     return hr;
@@ -300,6 +312,7 @@ static HRESULT WINAPI d3d9_CheckDeviceMultiSampleType(IDirect3D9Ex *iface, UINT 
         D3DFORMAT format, BOOL windowed, D3DMULTISAMPLE_TYPE multisample_type, DWORD *levels)
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
+    UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, device_type %#x, format %#x, windowed %#x, multisample_type %#x, levels %p.\n",
@@ -309,7 +322,12 @@ static HRESULT WINAPI d3d9_CheckDeviceMultiSampleType(IDirect3D9Ex *iface, UINT 
         return D3DERR_INVALIDCALL;
 
     wined3d_mutex_lock();
-    hr = wined3d_check_device_multisample_type(d3d9->wined3d, adapter, device_type,
+    if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
+    {
+        wined3d_mutex_unlock();
+        return hr;
+    }
+    hr = wined3d_check_device_multisample_type(d3d9->wined3d, wined3d_adapter, device_type,
             wined3dformat_from_d3dformat(format), windowed, multisample_type, levels);
     wined3d_mutex_unlock();
     if (hr == WINED3DERR_NOTAVAILABLE && levels)
@@ -322,13 +340,19 @@ static HRESULT WINAPI d3d9_CheckDepthStencilMatch(IDirect3D9Ex *iface, UINT adap
         D3DFORMAT adapter_format, D3DFORMAT rt_format, D3DFORMAT ds_format)
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
+    UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, device_type %#x, adapter_format %#x, rt_format %#x, ds_format %#x.\n",
             iface, adapter, device_type, adapter_format, rt_format, ds_format);
 
     wined3d_mutex_lock();
-    hr = wined3d_check_depth_stencil_match(d3d9->wined3d, adapter, device_type,
+    if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
+    {
+        wined3d_mutex_unlock();
+        return hr;
+    }
+    hr = wined3d_check_depth_stencil_match(d3d9->wined3d, wined3d_adapter, device_type,
             wined3dformat_from_d3dformat(adapter_format), wined3dformat_from_d3dformat(rt_format),
             wined3dformat_from_d3dformat(ds_format));
     wined3d_mutex_unlock();
@@ -357,6 +381,7 @@ static HRESULT WINAPI d3d9_GetDeviceCaps(IDirect3D9Ex *iface, UINT adapter, D3DD
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     struct wined3d_caps wined3d_caps;
+    UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, device_type %#x, caps %p.\n", iface, adapter, device_type, caps);
@@ -367,7 +392,12 @@ static HRESULT WINAPI d3d9_GetDeviceCaps(IDirect3D9Ex *iface, UINT adapter, D3DD
     memset(caps, 0, sizeof(*caps));
 
     wined3d_mutex_lock();
-    hr = wined3d_get_device_caps(d3d9->wined3d, adapter, device_type, &wined3d_caps);
+    if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
+    {
+        wined3d_mutex_unlock();
+        return hr;
+    }
+    hr = wined3d_get_device_caps(d3d9->wined3d, wined3d_adapter, device_type, &wined3d_caps);
     wined3d_mutex_unlock();
 
     d3dcaps_from_wined3dcaps(caps, &wined3d_caps);
@@ -535,6 +565,7 @@ static HRESULT WINAPI d3d9_GetAdapterLUID(IDirect3D9Ex *iface, UINT adapter, LUI
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     struct wined3d_adapter_identifier adapter_id;
+    UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, luid %p.\n", iface, adapter, luid);
@@ -543,7 +574,10 @@ static HRESULT WINAPI d3d9_GetAdapterLUID(IDirect3D9Ex *iface, UINT adapter, LUI
     adapter_id.description_size = 0;
     adapter_id.device_name_size = 0;
 
-    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(d3d9->wined3d, adapter, 0, &adapter_id)))
+    if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
+        return hr;
+
+    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(d3d9->wined3d, wined3d_adapter, 0, &adapter_id)))
         *luid = adapter_id.adapter_luid;
 
     return hr;

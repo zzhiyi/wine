@@ -107,6 +107,7 @@ struct d3d8_device
     struct wined3d_device_parent device_parent;
     LONG                    ref;
     struct wined3d_device  *wined3d_device;
+    UINT                    wined3d_output_ordinal;
     IDirect3D8             *d3d_parent;
     struct                  d3d8_handle_table handle_table;
 

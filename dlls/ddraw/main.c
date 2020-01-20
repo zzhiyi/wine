@@ -60,9 +60,10 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
     struct wined3d_output_desc output_desc;
     BOOL cont_enum = TRUE;
     HRESULT hr = S_OK;
-    UINT adapter = 0;
+    UINT adapter_idx;
+    UINT output_idx;
 
-    for (adapter = 0; SUCCEEDED(hr) && cont_enum; adapter++)
+    for (output_idx = 0; SUCCEEDED(hr) && cont_enum; output_idx++)
     {
         char DriverName[512] = "", DriverDescription[512] = "";
 
@@ -74,12 +75,17 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
         adapter_id.description = DriverDescription;
         adapter_id.description_size = sizeof(DriverDescription);
         wined3d_mutex_lock();
-        if (SUCCEEDED(hr = wined3d_get_adapter_identifier(wined3d, adapter, 0x0, &adapter_id)))
-            hr = wined3d_get_output_desc(wined3d, adapter, &output_desc);
+        if (FAILED(hr = wined3d_output_get_adapter_ordinal(wined3d, output_idx, &adapter_idx)))
+        {
+            wined3d_mutex_unlock();
+            return;
+        }
+        if (SUCCEEDED(hr = wined3d_get_adapter_identifier(wined3d, adapter_idx, 0x0, &adapter_id)))
+            hr = wined3d_get_output_desc(wined3d, output_idx, &output_desc);
         wined3d_mutex_unlock();
         if (SUCCEEDED(hr))
         {
-            TRACE("Interface %d: %s\n", adapter, wine_dbgstr_guid(&adapter_id.device_identifier));
+            TRACE("Interface %d: %s\n", output_idx, wine_dbgstr_guid(&adapter_id.device_identifier));
             cont_enum = callback(&adapter_id.device_identifier, adapter_id.description,
                     adapter_id.device_name, context, output_desc.monitor);
         }
