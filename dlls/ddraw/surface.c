@@ -6167,7 +6167,7 @@ HRESULT ddraw_surface_create(struct ddraw *ddraw, const DDSURFACEDESC2 *surface_
             else if (desc->ddsCaps.dwCaps & DDSCAPS_3DDEVICE)
                 bind_flags |= WINED3D_BIND_RENDER_TARGET;
 
-            if (!(ddraw->flags & DDRAW_NO3D) && SUCCEEDED(hr = wined3d_check_device_format(ddraw->wined3d,
+            if (!(ddraw->flags & DDRAW_NO3D) && SUCCEEDED(hr = wined3d_adapter_check_device_format(ddraw->wined3d,
                     WINED3DADAPTER_DEFAULT, WINED3D_DEVICE_TYPE_HAL, mode.format_id,
                     usage, bind_flags, WINED3D_RTYPE_TEXTURE_2D, wined3d_desc.format)))
                 desc->ddsCaps.dwCaps |= DDSCAPS_VIDEOMEMORY;

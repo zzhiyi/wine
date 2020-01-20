@@ -1686,7 +1686,7 @@ static BOOL wined3d_check_surface_format(const struct wined3d_format *format)
  *
  * For now lets report this on all formats, but in the future we may want to
  * restrict it to some should applications need that. */
-HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT adapter_idx,
+HRESULT CDECL wined3d_adapter_check_device_format(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id adapter_format_id, DWORD usage,
         unsigned int bind_flags, enum wined3d_resource_type resource_type, enum wined3d_format_id check_format_id)
 {
@@ -2002,7 +2002,7 @@ HRESULT CDECL wined3d_output_check_device_type(const struct wined3d *wined3d, UI
     }
 
     /* Validate that the back buffer format is usable for render targets. */
-    if (FAILED(wined3d_check_device_format(wined3d, wined3d->outputs[output_idx].adapter->ordinal, device_type, display_format,
+    if (FAILED(wined3d_adapter_check_device_format(wined3d, wined3d->outputs[output_idx].adapter->ordinal, device_type, display_format,
             0, WINED3D_BIND_RENDER_TARGET, WINED3D_RTYPE_TEXTURE_2D, backbuffer_format)))
     {
         TRACE("Format %s not allowed for render targets.\n", debug_d3dformat(backbuffer_format));

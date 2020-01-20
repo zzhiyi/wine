@@ -3473,7 +3473,7 @@ static HRESULT STDMETHODCALLTYPE d3d11_device_CheckFormatSupport(ID3D11Device2 *
     wined3d_device_get_creation_parameters(device->wined3d_device, &params);
     for (i = 0; i < ARRAY_SIZE(flag_mapping); ++i)
     {
-        hr = wined3d_check_device_format(wined3d, params.adapter_idx, params.device_type,
+        hr = wined3d_adapter_check_device_format(wined3d, params.adapter_idx, params.device_type,
                 WINED3DFMT_UNKNOWN, 0, flag_mapping[i].bind_flags, flag_mapping[i].rtype, wined3d_format);
         if (hr == WINED3DERR_NOTAVAILABLE || hr == WINED3DOK_NOMIPGEN)
             continue;
