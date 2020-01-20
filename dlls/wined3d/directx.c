@@ -2012,7 +2012,7 @@ HRESULT CDECL wined3d_output_check_device_type(const struct wined3d *wined3d, UI
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
+HRESULT CDECL wined3d_adapter_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
         enum wined3d_device_type device_type, struct wined3d_caps *caps)
 {
     const struct wined3d_d3d_info *d3d_info;

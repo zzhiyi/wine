@@ -2241,8 +2241,6 @@ UINT __cdecl wined3d_get_adapter_count(const struct wined3d *wined3d);
 HRESULT __cdecl wined3d_get_adapter_identifier(const struct wined3d *wined3d, UINT adapter_idx,
         DWORD flags, struct wined3d_adapter_identifier *identifier);
 struct wined3d_output * __cdecl wined3d_get_adapter_output(const struct wined3d *wined3d, unsigned int adapter_idx);
-HRESULT __cdecl wined3d_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
-        enum wined3d_device_type device_type, struct wined3d_caps *caps);
 UINT __cdecl wined3d_get_output_count(const struct wined3d *wined3d);
 HRESULT __cdecl wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int adapter_idx,
         struct wined3d_output_desc *desc);
@@ -2263,6 +2261,8 @@ HRESULT __cdecl wined3d_adapter_check_device_format(const struct wined3d *wined3
 HRESULT __cdecl wined3d_adapter_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id surface_format_id, BOOL windowed,
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels);
+HRESULT __cdecl wined3d_adapter_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
+        enum wined3d_device_type device_type, struct wined3d_caps *caps);
 HRESULT __cdecl wined3d_adapter_get_output_count(const struct wined3d *wined3d, UINT adapter_idx, UINT *count);
 HRESULT __cdecl wined3d_adapter_get_output_ordinal(const struct wined3d *wined3d, UINT adapter_idx, UINT output_idx,
         UINT *ordinal);

@@ -3835,7 +3835,7 @@ HRESULT CDECL wined3d_device_get_device_caps(const struct wined3d_device *device
 {
     TRACE("device %p, caps %p.\n", device, caps);
 
-    return wined3d_get_device_caps(device->wined3d, device->adapter->ordinal,
+    return wined3d_adapter_get_device_caps(device->wined3d, device->adapter->ordinal,
             device->create_parms.device_type, caps);
 }
 

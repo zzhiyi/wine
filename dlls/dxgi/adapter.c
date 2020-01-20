@@ -251,7 +251,7 @@ static HRESULT STDMETHODCALLTYPE dxgi_adapter_CheckInterfaceSupport(IWineDXGIAda
 
     wined3d_mutex_lock();
     wined3d = adapter->factory->wined3d;
-    hr = wined3d_get_device_caps(wined3d, adapter->ordinal, WINED3D_DEVICE_TYPE_HAL, &caps);
+    hr = wined3d_adapter_get_device_caps(wined3d, adapter->ordinal, WINED3D_DEVICE_TYPE_HAL, &caps);
     if (SUCCEEDED(hr))
         hr = wined3d_get_adapter_identifier(wined3d, adapter->ordinal, 0, &adapter_id);
     wined3d_mutex_unlock();
