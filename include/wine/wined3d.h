@@ -2246,9 +2246,6 @@ HRESULT __cdecl wined3d_check_device_format(const struct wined3d *wined3d, UINT 
 HRESULT __cdecl wined3d_check_device_multisample_type(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id surface_format_id, BOOL windowed,
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels);
-HRESULT __cdecl wined3d_check_device_type(const struct wined3d *wined3d, UINT adapter_idx,
-        enum wined3d_device_type device_type, enum wined3d_format_id display_format_id,
-        enum wined3d_format_id backbuffer_format_id, BOOL windowed);
 struct wined3d * __cdecl wined3d_create(DWORD flags);
 ULONG __cdecl wined3d_decref(struct wined3d *wined3d);
 UINT __cdecl wined3d_get_adapter_count(const struct wined3d *wined3d);
@@ -2539,6 +2536,9 @@ HRESULT __cdecl wined3d_device_validate_device(const struct wined3d_device *devi
 HRESULT __cdecl wined3d_output_check_device_format_conversion(const struct wined3d *wined3d, UINT output_idx,
         enum wined3d_device_type device_type, enum wined3d_format_id source_format_id,
         enum wined3d_format_id target_format_id);
+HRESULT __cdecl wined3d_output_check_device_type(const struct wined3d *wined3d, UINT output_idx,
+        enum wined3d_device_type device_type, enum wined3d_format_id display_format_id,
+        enum wined3d_format_id backbuffer_format_id, BOOL windowed);
 HRESULT __cdecl wined3d_output_enum_modes(const struct wined3d *wined3d, UINT output_idx,
         enum wined3d_format_id format_id, enum wined3d_scanline_ordering scanline_ordering,
         UINT mode_idx, struct wined3d_display_mode *mode);

@@ -235,7 +235,7 @@ static HRESULT WINAPI d3d9_CheckDeviceType(IDirect3D9Ex *iface, UINT adapter, D3
         return WINED3DERR_NOTAVAILABLE;
 
     wined3d_mutex_lock();
-    hr = wined3d_check_device_type(d3d9->wined3d, adapter, device_type, wined3dformat_from_d3dformat(display_format),
+    hr = wined3d_output_check_device_type(d3d9->wined3d, adapter, device_type, wined3dformat_from_d3dformat(display_format),
             wined3dformat_from_d3dformat(backbuffer_format), windowed);
     wined3d_mutex_unlock();
 
