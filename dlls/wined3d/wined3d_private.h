@@ -2856,6 +2856,8 @@ struct wined3d_adapter_ops
 /* The output structure, represents a video card output */
 struct wined3d_output
 {
+    UINT ordinal;
+
     D3DKMT_HANDLE kmt_adapter;
     D3DKMT_HANDLE kmt_device;
     D3DDDI_VIDEO_PRESENT_SOURCE_ID vidpn_source_id;

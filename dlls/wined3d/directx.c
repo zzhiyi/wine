@@ -63,6 +63,24 @@ const GLenum magLookup[] =
     GL_NEAREST, GL_NEAREST, GL_LINEAR,
 };
 
+/* Retrieve an ordinal to uniquely identify an output within a wined3d instance.
+ * output_idx here is the output index within an adapter, rather than in wined3d instance */
+HRESULT CDECL wined3d_adapter_get_output_ordinal(const struct wined3d *wined3d, UINT adapter_idx, UINT output_idx,
+        UINT *ordinal)
+{
+    struct wined3d_adapter *adapter;
+
+    if (adapter_idx >= wined3d->adapter_count)
+        return WINED3DERR_INVALIDCALL;
+
+    adapter = wined3d->adapters[adapter_idx];
+    if (output_idx >= adapter->output_count)
+        return WINED3DERR_INVALIDCALL;
+
+    *ordinal = adapter->outputs[output_idx].ordinal;
+    return WINED3D_OK;
+}
+
 void CDECL wined3d_output_release_ownership(const struct wined3d_output *output)
 {
     D3DKMT_SETVIDPNSOURCEOWNER set_owner_desc = {0};
@@ -117,13 +135,13 @@ static void wined3d_output_cleanup(const struct wined3d_output *output)
     D3DKMTCloseAdapter(&close_adapter_desc);
 }
 
-static HRESULT wined3d_output_init(struct wined3d_output *output, const WCHAR *device_name)
+static HRESULT wined3d_output_init(struct wined3d_output *output, const WCHAR *device_name, UINT ordinal)
 {
     D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open_adapter_desc;
     D3DKMT_CREATEDEVICE create_device_desc = {{0}};
     D3DKMT_CLOSEADAPTER close_adapter_desc;
 
-    TRACE("output %p, device_name %s.\n", output, wine_dbgstr_w(device_name));
+    TRACE("output %p, device_name %s, ordinal %u.\n", output, wine_dbgstr_w(device_name), ordinal);
 
     lstrcpyW(open_adapter_desc.DeviceName, device_name);
     if (D3DKMTOpenAdapterFromGdiDisplayName(&open_adapter_desc))
@@ -137,6 +155,7 @@ static HRESULT wined3d_output_init(struct wined3d_output *output, const WCHAR *d
         return E_FAIL;
     }
 
+    output->ordinal = ordinal;
     output->kmt_adapter = open_adapter_desc.hAdapter;
     output->kmt_device = create_device_desc.hDevice;
     output->vidpn_source_id = open_adapter_desc.VidPnSourceId;
@@ -2974,7 +2993,7 @@ HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
 
     wined3d->adapters[0]->outputs = wined3d->outputs;
     wined3d->adapters[0]->output_count = 1;
-    if (FAILED(hr = wined3d_output_init(&wined3d->outputs[0], wined3d->adapters[0]->device_name)))
+    if (FAILED(hr = wined3d_output_init(&wined3d->outputs[0], wined3d->adapters[0]->device_name, 0)))
     {
         WARN("Failed to create output, hr %#x.\n", hr);
         goto fail;

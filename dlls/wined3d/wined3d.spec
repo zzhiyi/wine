@@ -27,6 +27,7 @@
 @ cdecl wined3d_unregister_windows(ptr)
 
 @ cdecl wined3d_adapter_get_output_count(ptr long ptr)
+@ cdecl wined3d_adapter_get_output_ordinal(ptr long long ptr)
 
 @ cdecl wined3d_blend_state_create(ptr ptr ptr ptr ptr)
 @ cdecl wined3d_blend_state_decref(ptr)
