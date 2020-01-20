@@ -143,7 +143,7 @@ static HRESULT dxgi_output_get_display_mode_list(struct dxgi_output *output,
 
     for (i = 0; i < *mode_count; ++i)
     {
-        if (FAILED(hr = wined3d_enum_adapter_modes(wined3d, output->adapter->ordinal,
+        if (FAILED(hr = wined3d_output_enum_modes(wined3d, output->wined3d_output_ordinal,
                 wined3d_format, WINED3D_SCANLINE_ORDERING_UNKNOWN, i, &mode)))
         {
             WARN("Failed to enum adapter mode %u, hr %#x.\n", i, hr);
