@@ -1349,6 +1349,24 @@ static LONG xrandr14_set_current_settings( ULONG_PTR id, DEVMODEW *mode )
     if (!output_info || output_info->connection != RR_Connected)
         goto done;
 
+    if (is_detached_mode(mode))
+    {
+        /* Already detached */
+        if (!output_info->crtc)
+        {
+            ret = DISP_CHANGE_SUCCESSFUL;
+            goto done;
+        }
+
+        /* Execute detach operation */
+        status = pXRRSetCrtcConfig( gdi_display, screen_resources, output_info->crtc,
+                                    CurrentTime, 0, 0, None, RR_Rotate_0, NULL, 0 );
+        if (status == RRSetConfigSuccess)
+            ret = DISP_CHANGE_SUCCESSFUL;
+
+        goto done;
+    }
+
     /* Attached */
     if (output_info->crtc)
     {
