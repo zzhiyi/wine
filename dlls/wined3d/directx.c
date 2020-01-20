@@ -1870,7 +1870,7 @@ HRESULT CDECL wined3d_check_device_format(const struct wined3d *wined3d, UINT ad
     return WINED3D_OK;
 }
 
-UINT CDECL wined3d_calculate_format_pitch(const struct wined3d *wined3d, UINT adapter_idx,
+UINT CDECL wined3d_adapter_calculate_format_pitch(const struct wined3d *wined3d, UINT adapter_idx,
         enum wined3d_format_id format_id, UINT width)
 {
     const struct wined3d_adapter *adapter;
