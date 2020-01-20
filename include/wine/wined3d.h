@@ -2239,8 +2239,6 @@ struct wined3d * __cdecl wined3d_create(DWORD flags);
 ULONG __cdecl wined3d_decref(struct wined3d *wined3d);
 UINT __cdecl wined3d_get_adapter_count(const struct wined3d *wined3d);
 UINT __cdecl wined3d_get_output_count(const struct wined3d *wined3d);
-HRESULT __cdecl wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int adapter_idx,
-        struct wined3d_output_desc *desc);
 ULONG __cdecl wined3d_incref(struct wined3d *wined3d);
 HRESULT __cdecl wined3d_register_software_device(struct wined3d *wined3d, void *init_function);
 BOOL __cdecl wined3d_register_window(struct wined3d *wined3d, HWND window,
@@ -2546,6 +2544,8 @@ HRESULT __cdecl wined3d_output_enum_modes(const struct wined3d *wined3d, UINT ou
 HRESULT __cdecl wined3d_output_find_closest_matching_mode(const struct wined3d *wined3d,
         unsigned int output_idx, struct wined3d_display_mode *mode);
 HRESULT __cdecl wined3d_output_get_adapter_ordinal(const struct wined3d *wined3d, UINT output_idx, UINT *ordinal);
+HRESULT __cdecl wined3d_output_get_desc(const struct wined3d *wined3d, unsigned int output_idx,
+        struct wined3d_output_desc *desc);
 HRESULT __cdecl wined3d_output_get_display_mode(const struct wined3d *wined3d, UINT output_idx,
         struct wined3d_display_mode *mode, enum wined3d_display_rotation *rotation);
 UINT __cdecl wined3d_output_get_mode_count(const struct wined3d *wined3d, UINT output_idx,

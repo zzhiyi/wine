@@ -81,7 +81,7 @@ static void ddraw_enumerate_secondary_devices(struct wined3d *wined3d, LPDDENUMC
             return;
         }
         if (SUCCEEDED(hr = wined3d_adapter_get_identifier(wined3d, adapter_idx, 0x0, &adapter_id)))
-            hr = wined3d_get_output_desc(wined3d, output_idx, &output_desc);
+            hr = wined3d_output_get_desc(wined3d, output_idx, &output_desc);
         wined3d_mutex_unlock();
         if (SUCCEEDED(hr))
         {

@@ -965,7 +965,7 @@ static BOOL CALLBACK enum_monitor_proc(HMONITOR monitor, HDC hdc, RECT *rect, LP
     return TRUE;
 }
 
-HRESULT CDECL wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int output_idx,
+HRESULT CDECL wined3d_output_get_desc(const struct wined3d *wined3d, unsigned int output_idx,
         struct wined3d_output_desc *desc)
 {
     struct wined3d_output *output;

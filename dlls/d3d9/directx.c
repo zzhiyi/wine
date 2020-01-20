@@ -414,7 +414,7 @@ static HMONITOR WINAPI d3d9_GetAdapterMonitor(IDirect3D9Ex *iface, UINT adapter)
     TRACE("iface %p, adapter %u.\n", iface, adapter);
 
     wined3d_mutex_lock();
-    hr = wined3d_get_output_desc(d3d9->wined3d, adapter, &desc);
+    hr = wined3d_output_get_desc(d3d9->wined3d, adapter, &desc);
     wined3d_mutex_unlock();
 
     if (FAILED(hr))
