@@ -581,20 +581,21 @@ struct dxgi_output *unsafe_impl_from_IDXGIOutput(IDXGIOutput *iface)
     return CONTAINING_RECORD(iface, struct dxgi_output, IDXGIOutput4_iface);
 }
 
-static void dxgi_output_init(struct dxgi_output *output, struct dxgi_adapter *adapter)
+static void dxgi_output_init(struct dxgi_output *output, UINT ordinal, struct dxgi_adapter *adapter)
 {
     output->IDXGIOutput4_iface.lpVtbl = &dxgi_output_vtbl;
     output->refcount = 1;
     wined3d_private_store_init(&output->private_store);
     output->adapter = adapter;
+    wined3d_adapter_get_output_ordinal(adapter->factory->wined3d, adapter->ordinal, ordinal, &output->wined3d_output_ordinal);
     IWineDXGIAdapter_AddRef(&output->adapter->IWineDXGIAdapter_iface);
 }
 
-HRESULT dxgi_output_create(struct dxgi_adapter *adapter, struct dxgi_output **output)
+HRESULT dxgi_output_create(struct dxgi_adapter *adapter, UINT ordinal, struct dxgi_output **output)
 {
     if (!(*output = heap_alloc_zero(sizeof(**output))))
         return E_OUTOFMEMORY;
 
-    dxgi_output_init(*output, adapter);
+    dxgi_output_init(*output, ordinal, adapter);
     return S_OK;
 }
