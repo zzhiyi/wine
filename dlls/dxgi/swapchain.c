@@ -175,7 +175,6 @@ static HRESULT dxgi_swapchain_resize_target(IDXGISwapChain1 *swapchain,
 {
     struct wined3d_display_mode mode;
     struct dxgi_output *dxgi_output;
-    struct dxgi_adapter *adapter;
     IDXGIOutput *output;
     HRESULT hr;
 
@@ -188,7 +187,6 @@ static HRESULT dxgi_swapchain_resize_target(IDXGISwapChain1 *swapchain,
     if (FAILED(hr = IDXGISwapChain1_GetContainingOutput(swapchain, &output)))
         return hr;
     dxgi_output = unsafe_impl_from_IDXGIOutput(output);
-    adapter = dxgi_output->adapter;
     IDXGIOutput_Release(output);
 
     TRACE("Mode: %s.\n", debug_dxgi_mode(target_mode_desc));
@@ -198,7 +196,8 @@ static HRESULT dxgi_swapchain_resize_target(IDXGISwapChain1 *swapchain,
 
     wined3d_display_mode_from_dxgi(&mode, target_mode_desc);
 
-    return wined3d_swapchain_state_resize_target(state, adapter->factory->wined3d, adapter->ordinal, &mode);
+    return wined3d_swapchain_state_resize_target(state, dxgi_output->adapter->factory->wined3d,
+            dxgi_output->wined3d_output_ordinal, &mode);
 }
 
 static HWND d3d11_swapchain_get_hwnd(struct d3d11_swapchain *swapchain)
