@@ -352,7 +352,7 @@ static HRESULT WINAPI d3d9_CheckDepthStencilMatch(IDirect3D9Ex *iface, UINT adap
         wined3d_mutex_unlock();
         return hr;
     }
-    hr = wined3d_check_depth_stencil_match(d3d9->wined3d, wined3d_adapter, device_type,
+    hr = wined3d_adapter_check_depth_stencil_match(d3d9->wined3d, wined3d_adapter, device_type,
             wined3dformat_from_d3dformat(adapter_format), wined3dformat_from_d3dformat(rt_format),
             wined3dformat_from_d3dformat(ds_format));
     wined3d_mutex_unlock();

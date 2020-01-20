@@ -1554,7 +1554,7 @@ HRESULT CDECL wined3d_output_get_raster_status(const struct wined3d *wined3d, UI
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_check_depth_stencil_match(const struct wined3d *wined3d,
+HRESULT CDECL wined3d_adapter_check_depth_stencil_match(const struct wined3d *wined3d,
         UINT adapter_idx, enum wined3d_device_type device_type, enum wined3d_format_id adapter_format_id,
         enum wined3d_format_id render_target_format_id, enum wined3d_format_id depth_stencil_format_id)
 {
