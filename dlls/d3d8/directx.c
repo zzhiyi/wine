@@ -280,7 +280,7 @@ static HRESULT WINAPI d3d8_CheckDeviceFormat(IDirect3D8 *iface, UINT adapter, D3
     if (format == D3DFMT_RESZ && resource_type == D3DRTYPE_SURFACE && usage == D3DUSAGE_RENDERTARGET)
     {
         DWORD levels;
-        hr = wined3d_check_device_multisample_type(d3d8->wined3d, wined3d_adapter, device_type,
+        hr = wined3d_adapter_check_device_multisample_type(d3d8->wined3d, wined3d_adapter, device_type,
                 WINED3DFMT_D24_UNORM_S8_UINT, FALSE, WINED3D_MULTISAMPLE_NON_MASKABLE, &levels);
         if (SUCCEEDED(hr) && !levels)
             hr = D3DERR_NOTAVAILABLE;
@@ -312,7 +312,7 @@ static HRESULT WINAPI d3d8_CheckDeviceMultiSampleType(IDirect3D8 *iface, UINT ad
         wined3d_mutex_unlock();
         return hr;
     }
-    hr = wined3d_check_device_multisample_type(d3d8->wined3d, wined3d_adapter, device_type,
+    hr = wined3d_adapter_check_device_multisample_type(d3d8->wined3d, wined3d_adapter, device_type,
             wined3dformat_from_d3dformat(format), windowed,
             (enum wined3d_multisample_type)multisample_type, NULL);
     wined3d_mutex_unlock();

@@ -1,7 +1,6 @@
 @ stdcall wined3d_mutex_lock()
 @ stdcall wined3d_mutex_unlock()
 
-@ cdecl wined3d_check_device_multisample_type(ptr long long long long long ptr)
 @ cdecl wined3d_create(long)
 @ cdecl wined3d_decref(ptr)
 @ cdecl wined3d_get_adapter_count(ptr)
@@ -18,6 +17,7 @@
 @ cdecl wined3d_adapter_calculate_format_pitch(ptr long long long)
 @ cdecl wined3d_adapter_check_depth_stencil_match(ptr long long long long long)
 @ cdecl wined3d_adapter_check_device_format(ptr long long long long long long long)
+@ cdecl wined3d_adapter_check_device_multisample_type(ptr long long long long long ptr)
 @ cdecl wined3d_adapter_get_output_count(ptr long ptr)
 @ cdecl wined3d_adapter_get_output_ordinal(ptr long long ptr)
 
