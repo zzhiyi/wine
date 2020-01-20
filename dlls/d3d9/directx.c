@@ -124,18 +124,27 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
 {
     struct d3d9 *d3d9 = impl_from_IDirect3D9Ex(iface);
     struct wined3d_adapter_identifier adapter_id;
+    struct wined3d_output_desc output_desc;
     UINT wined3d_adapter;
     HRESULT hr;
 
     TRACE("iface %p, adapter %u, flags %#x, identifier %p.\n",
             iface, adapter, flags, identifier);
 
+    if (FAILED(hr = wined3d_output_get_desc(d3d9->wined3d, adapter, &output_desc)))
+        return hr;
+
+    if (!WideCharToMultiByte(CP_ACP, 0, output_desc.device_name, -1, identifier->DeviceName,
+            sizeof(identifier->DeviceName), NULL, NULL))
+    {
+        ERR("Failed to convert device name, last error %#x.\n", GetLastError());
+        return E_FAIL;
+    }
+
     adapter_id.driver = identifier->Driver;
     adapter_id.driver_size = sizeof(identifier->Driver);
     adapter_id.description = identifier->Description;
     adapter_id.description_size = sizeof(identifier->Description);
-    adapter_id.device_name = identifier->DeviceName;
-    adapter_id.device_name_size = sizeof(identifier->DeviceName);
 
     if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
         return hr;
@@ -572,7 +581,6 @@ static HRESULT WINAPI d3d9_GetAdapterLUID(IDirect3D9Ex *iface, UINT adapter, LUI
 
     adapter_id.driver_size = 0;
     adapter_id.description_size = 0;
-    adapter_id.device_name_size = 0;
 
     if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
         return hr;
