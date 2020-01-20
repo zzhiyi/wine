@@ -635,6 +635,7 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
     if ((style & WS_MAXIMIZE) && (style & WS_CAPTION) == WS_CAPTION) return FALSE;
     if (!(data = get_win_data( hwnd ))) return FALSE;
     fullscreen = is_window_rect_fullscreen( &data->whole_rect );
+    rect = data->whole_rect;
     release_win_data( data );
     if (!fullscreen) return FALSE;
     if (!(thread_data = x11drv_thread_data())) return FALSE;
@@ -642,7 +643,6 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
         if (GetTickCount() - thread_data->clip_reset < 1000) return FALSE;
         if (clipping_cursor && thread_data->clip_hwnd) return FALSE;  /* already clipping */
     }
-    rect = get_primary_monitor_rect();
     if (!grab_fullscreen)
     {
         RECT virtual_rect = get_virtual_screen_rect();
