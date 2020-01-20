@@ -745,6 +745,12 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
         if (flags & CDS_UPDATEREGISTRY)
             write_registry_settings(devmode);
 
+        if (lstrcmpiW(primary_adapter, devname))
+        {
+            WARN("Changing non-primary adapter settings is unsupported.\n");
+            return DISP_CHANGE_SUCCESSFUL;
+        }
+
         if (!(flags & (CDS_TEST | CDS_NORESET)))
             return pSetCurrentMode(i);
 
