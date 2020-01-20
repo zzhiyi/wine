@@ -3476,6 +3476,52 @@ err_out:
     IDirect3D9_Release(d3d9_ptr);
 }
 
+static void test_multi_adapter(void)
+{
+    UINT adapter_count, expected_adapter_count;
+    DISPLAY_DEVICEA display_device;
+    MONITORINFOEXA monitor_info;
+    HMONITOR monitor;
+    IDirect3D9 *d3d9;
+    UINT i, j;
+
+    d3d9 = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(d3d9 != NULL, "Failed to create a D3D object.\n");
+
+    expected_adapter_count = GetSystemMetrics(SM_CMONITORS);
+    adapter_count = IDirect3D9_GetAdapterCount(d3d9);
+    todo_wine_if(expected_adapter_count > 1)
+    ok(adapter_count == expected_adapter_count, "Expect adapter count %d, got %d\n",
+            expected_adapter_count, adapter_count);
+
+    for (i = 0; i < adapter_count; ++i)
+    {
+        monitor = IDirect3D9_GetAdapterMonitor(d3d9, i);
+        ok(monitor != NULL, "IDirect3D9_GetAdapterMonitor failed\n");
+
+        monitor_info.cbSize = sizeof(monitor_info);
+        ok(GetMonitorInfoA(monitor, (MONITORINFO *)&monitor_info), "GetMonitorInfoA failed, error %#x.\n",
+                GetLastError());
+
+        if (i == 0)
+            ok(monitor_info.dwFlags == MONITORINFOF_PRIMARY, "Expect adapter primary.\n");
+        else
+            ok(monitor_info.dwFlags == 0, "Expect adapter not primary.\n");
+
+        display_device.cb = sizeof(display_device);
+        for (j = 0; EnumDisplayDevicesA(NULL, j, &display_device, 0); ++j)
+        {
+            if (!lstrcmpA(display_device.DeviceName, monitor_info.szDevice))
+            {
+                ok(display_device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP,
+                        "Expect StateFlags contains DISPLAY_DEVICE_ATTACHED_TO_DESKTOP.\n");
+            }
+        }
+    }
+
+    IDirect3D9_Release(d3d9);
+}
+
 static void test_multi_device(void)
 {
     IDirect3DDevice9 *device1, *device2;
@@ -13441,6 +13487,7 @@ START_TEST(device)
     test_vertex_declaration_alignment();
     test_unused_declaration_type();
     test_fpu_setup();
+    test_multi_adapter();
     test_multi_device();
     test_display_formats();
     test_display_modes();
