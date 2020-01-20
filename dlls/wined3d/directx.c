@@ -982,14 +982,21 @@ HRESULT CDECL wined3d_get_output_desc(const struct wined3d *wined3d, unsigned in
     return WINED3D_OK;
 }
 
-struct wined3d_output * CDECL wined3d_get_adapter_output(const struct wined3d *wined3d, unsigned int adapter_idx)
+struct wined3d_output * CDECL wined3d_adapter_get_output(const struct wined3d *wined3d,UINT adapter_idx,
+        UINT output_idx)
 {
-    TRACE("wined3d %p, adapter_idx %u.\n", wined3d, adapter_idx);
+    struct wined3d_adapter *adapter;
+
+    TRACE("wined3d %p, adapter_idx %u, output_idx %u.\n", wined3d, adapter_idx, output_idx);
 
     if (adapter_idx >= wined3d->adapter_count)
         return NULL;
 
-    return &wined3d->adapters[adapter_idx]->outputs[0];
+    adapter = wined3d->adapters[adapter_idx];
+    if (output_idx >= adapter->output_count)
+        return NULL;
+
+    return &adapter->outputs[output_idx];
 }
 
 /* FIXME: GetAdapterModeCount and EnumAdapterModes currently only returns modes
