@@ -657,6 +657,15 @@ struct x11drv_mode_info
     unsigned int refresh_rate;
 };
 
+struct x11drv_adapter_setting
+{
+    BOOL placed;
+    ULONG_PTR id;
+    DEVMODEW mode;
+    RECT old_rect;
+    RECT new_rect;
+};
+
 #define DEPTH_COUNT 3
 extern const DWORD *depths DECLSPEC_HIDDEN;
 
@@ -706,6 +715,10 @@ struct x11drv_settings_handler
      *
      * Return DISP_CHANGE_* error codes, same in ChangeDisplaySettingsEx return values */
     LONG (*set_current_settings)(ULONG_PTR id, DEVMODEW *mode);
+
+    /* convert_coordinates will be called to convert virtual screen coordinates to driver specific coordinates.
+     * This function is optional and can be NULL if driver don't need to convert coordinates */
+    void (*convert_coordinates)(struct x11drv_adapter_setting *settings, INT count);
 };
 
 extern void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *handler) DECLSPEC_HIDDEN;
