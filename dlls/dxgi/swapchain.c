@@ -156,15 +156,13 @@ static HRESULT dxgi_swapchain_set_fullscreen_state(struct wined3d_swapchain_stat
         const struct wined3d_swapchain_desc *swapchain_desc, IDXGIOutput *output)
 {
     struct dxgi_output *dxgi_output;
-    struct dxgi_adapter *adapter;
     HRESULT hr;
 
     dxgi_output = unsafe_impl_from_IDXGIOutput(output);
-    adapter = dxgi_output->adapter;
 
     wined3d_mutex_lock();
     hr = wined3d_swapchain_state_set_fullscreen(state, swapchain_desc,
-            adapter->factory->wined3d, adapter->ordinal, NULL);
+            dxgi_output->adapter->factory->wined3d, dxgi_output->wined3d_output_ordinal, NULL);
     wined3d_mutex_unlock();
 
     return hr;
