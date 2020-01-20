@@ -2857,6 +2857,8 @@ struct wined3d_adapter_ops
 struct wined3d_output
 {
     UINT ordinal;
+    WCHAR device_name[CCHDEVICENAME];
+    struct wined3d_adapter *adapter;
 
     D3DKMT_HANDLE kmt_adapter;
     D3DKMT_HANDLE kmt_device;

@@ -183,7 +183,7 @@ static HRESULT WINAPI d3d9_EnumAdapterModes(IDirect3D9Ex *iface, UINT adapter,
         return D3DERR_INVALIDCALL;
 
     wined3d_mutex_lock();
-    hr = wined3d_enum_adapter_modes(d3d9->wined3d, adapter, wined3dformat_from_d3dformat(format),
+    hr = wined3d_output_enum_modes(d3d9->wined3d, adapter, wined3dformat_from_d3dformat(format),
             WINED3D_SCANLINE_ORDERING_UNKNOWN, mode_idx, &wined3d_mode);
     wined3d_mutex_unlock();
 
@@ -457,7 +457,7 @@ static HRESULT WINAPI d3d9_EnumAdapterModesEx(IDirect3D9Ex *iface,
         return D3DERR_INVALIDCALL;
 
     wined3d_mutex_lock();
-    hr = wined3d_enum_adapter_modes(d3d9->wined3d, adapter, wined3dformat_from_d3dformat(filter->Format),
+    hr = wined3d_output_enum_modes(d3d9->wined3d, adapter, wined3dformat_from_d3dformat(filter->Format),
             filter->ScanLineOrdering, mode_idx, &wined3d_mode);
     wined3d_mutex_unlock();
 
