@@ -207,7 +207,7 @@ static HRESULT WINAPI d3d9_GetAdapterDisplayMode(IDirect3D9Ex *iface, UINT adapt
     TRACE("iface %p, adapter %u, mode %p.\n", iface, adapter, mode);
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_display_mode(d3d9->wined3d, adapter, &wined3d_mode, NULL);
+    hr = wined3d_output_get_display_mode(d3d9->wined3d, adapter, &wined3d_mode, NULL);
     wined3d_mutex_unlock();
 
     if (SUCCEEDED(hr))
@@ -487,7 +487,7 @@ static HRESULT WINAPI d3d9_GetAdapterDisplayModeEx(IDirect3D9Ex *iface,
         return D3DERR_INVALIDCALL;
 
     wined3d_mutex_lock();
-    hr = wined3d_get_adapter_display_mode(d3d9->wined3d, adapter, &wined3d_mode,
+    hr = wined3d_output_get_display_mode(d3d9->wined3d, adapter, &wined3d_mode,
             (enum wined3d_display_rotation *)rotation);
     wined3d_mutex_unlock();
 

@@ -2863,6 +2863,8 @@ struct wined3d_output
     D3DKMT_HANDLE kmt_adapter;
     D3DKMT_HANDLE kmt_device;
     D3DDDI_VIDEO_PRESENT_SOURCE_ID vidpn_source_id;
+
+    enum wined3d_format_id screen_format;
 };
 
 /* The adapter structure, represents a video card */
@@ -2870,7 +2872,6 @@ struct wined3d_adapter
 {
     unsigned int ordinal;
     POINT monitor_position;
-    enum wined3d_format_id screen_format;
 
     struct wined3d_gl_info  gl_info;
     struct wined3d_d3d_info d3d_info;
