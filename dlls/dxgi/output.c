@@ -371,9 +371,9 @@ static HRESULT STDMETHODCALLTYPE dxgi_output_TakeOwnership(IDXGIOutput4 *iface, 
         return DXGI_ERROR_INVALID_CALL;
 
     wined3d_mutex_lock();
-    if ((wined3d_output = wined3d_get_adapter_output(output->adapter->factory->wined3d,
-            output->adapter->ordinal)))
-        hr = wined3d_output_take_ownership(wined3d_output, exclusive);
+    wined3d_output = wined3d_adapter_get_output(output->adapter->factory->wined3d, output->adapter->ordinal,
+            output->wined3d_output_ordinal);
+    hr = wined3d_output_take_ownership(wined3d_output, exclusive);
     wined3d_mutex_unlock();
 
     return hr;
@@ -387,9 +387,9 @@ static void STDMETHODCALLTYPE dxgi_output_ReleaseOwnership(IDXGIOutput4 *iface)
     TRACE("iface %p.\n", iface);
 
     wined3d_mutex_lock();
-    if ((wined3d_output = wined3d_get_adapter_output(output->adapter->factory->wined3d,
-            output->adapter->ordinal)))
-        wined3d_output_release_ownership(wined3d_output);
+    wined3d_output = wined3d_adapter_get_output(output->adapter->factory->wined3d, output->adapter->ordinal,
+            output->wined3d_output_ordinal);
+    wined3d_output_release_ownership(wined3d_output);
     wined3d_mutex_unlock();
 }
 
