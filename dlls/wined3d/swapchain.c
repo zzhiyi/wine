@@ -1385,7 +1385,7 @@ static HRESULT wined3d_swapchain_state_set_display_mode(struct wined3d_swapchain
 
     if (state->desc.flags & WINED3D_SWAPCHAIN_USE_CLOSEST_MATCHING_MODE)
     {
-        if (FAILED(hr = wined3d_find_closest_matching_adapter_mode(wined3d, adapter_idx, mode)))
+        if (FAILED(hr = wined3d_output_find_closest_matching_mode(wined3d, adapter_idx, mode)))
         {
             WARN("Failed to find closest matching mode, hr %#x.\n", hr);
         }

@@ -1117,20 +1117,20 @@ HRESULT CDECL wined3d_output_enum_modes(const struct wined3d *wined3d, UINT outp
     return WINED3D_OK;
 }
 
-HRESULT CDECL wined3d_find_closest_matching_adapter_mode(const struct wined3d *wined3d,
-        unsigned int adapter_idx, struct wined3d_display_mode *mode)
+HRESULT CDECL wined3d_output_find_closest_matching_mode(const struct wined3d *wined3d,
+        unsigned int output_idx, struct wined3d_display_mode *mode)
 {
     unsigned int i, j, mode_count, matching_mode_count, closest;
     struct wined3d_display_mode **matching_modes;
     struct wined3d_display_mode *modes;
     HRESULT hr;
 
-    TRACE("wined3d %p, adapter_idx %u, mode %p.\n", wined3d, adapter_idx, mode);
+    TRACE("wined3d %p, output_idx %u, mode %p.\n", wined3d, output_idx, mode);
 
-    if (!(mode_count = wined3d_output_get_mode_count(wined3d, adapter_idx,
+    if (!(mode_count = wined3d_output_get_mode_count(wined3d, output_idx,
             mode->format_id, WINED3D_SCANLINE_ORDERING_UNKNOWN)))
     {
-        WARN("Adapter has 0 matching modes.\n");
+        WARN("Output %d has 0 matching modes.\n", output_idx);
         return E_FAIL;
     }
 
@@ -1144,7 +1144,7 @@ HRESULT CDECL wined3d_find_closest_matching_adapter_mode(const struct wined3d *w
 
     for (i = 0; i < mode_count; ++i)
     {
-        if (FAILED(hr = wined3d_output_enum_modes(wined3d, adapter_idx,
+        if (FAILED(hr = wined3d_output_enum_modes(wined3d, output_idx,
                 mode->format_id, WINED3D_SCANLINE_ORDERING_UNKNOWN, i, &modes[i])))
         {
             heap_free(matching_modes);
@@ -1181,7 +1181,7 @@ HRESULT CDECL wined3d_find_closest_matching_adapter_mode(const struct wined3d *w
     if (!mode->width || !mode->height)
     {
         struct wined3d_display_mode current_mode;
-        if (FAILED(hr = wined3d_output_get_display_mode(wined3d, adapter_idx,
+        if (FAILED(hr = wined3d_output_get_display_mode(wined3d, output_idx,
                 &current_mode, NULL)))
         {
             heap_free(matching_modes);
