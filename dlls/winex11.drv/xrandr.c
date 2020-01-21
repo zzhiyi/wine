@@ -68,6 +68,7 @@ MAKE_FUNCPTR(XRRFreeOutputInfo)
 MAKE_FUNCPTR(XRRFreeScreenResources)
 MAKE_FUNCPTR(XRRGetCrtcInfo)
 MAKE_FUNCPTR(XRRGetOutputInfo)
+MAKE_FUNCPTR(XRRGetScreenSizeRange)
 MAKE_FUNCPTR(XRRGetScreenResources)
 MAKE_FUNCPTR(XRRSetCrtcConfig)
 MAKE_FUNCPTR(XRRSetScreenSize)
@@ -141,6 +142,7 @@ static int load_xrandr(void)
         LOAD_SYMBOL(xrandr, XRRFreeScreenResources)
         LOAD_SYMBOL(xrandr, XRRGetCrtcInfo)
         LOAD_SYMBOL(xrandr, XRRGetOutputInfo)
+        LOAD_SYMBOL(xrandr, XRRGetScreenSizeRange)
         LOAD_SYMBOL(xrandr, XRRGetScreenResources)
         LOAD_SYMBOL(xrandr, XRRSetCrtcConfig)
         LOAD_SYMBOL(xrandr, XRRSetScreenSize)
@@ -414,11 +416,13 @@ static int xrandr12_get_current_mode(void)
     return ret;
 }
 
-static void get_screen_size( XRRScreenResources *resources, unsigned int *width, unsigned int *height )
+static void get_screen_size( XRRScreenResources *resources, INT *width, INT *height )
 {
+    INT max_width, max_height;
     XRRCrtcInfo *crtc_info;
     int i;
-    *width = *height = 0;
+
+    pXRRGetScreenSizeRange( gdi_display, root_window, width, height, &max_width, &max_height );
 
     for (i = 0; i < resources->ncrtc; ++i)
     {
@@ -427,8 +431,8 @@ static void get_screen_size( XRRScreenResources *resources, unsigned int *width,
 
         if (crtc_info->mode != None)
         {
-            *width = max(*width, crtc_info->x + crtc_info->width);
-            *height = max(*height, crtc_info->y + crtc_info->height);
+            *width = max(*width, crtc_info->x + (INT)crtc_info->width);
+            *height = max(*height, crtc_info->y + (INT)crtc_info->height);
         }
 
         pXRRFreeCrtcInfo( crtc_info );
@@ -437,7 +441,7 @@ static void get_screen_size( XRRScreenResources *resources, unsigned int *width,
 
 static LONG xrandr12_set_current_mode( int mode )
 {
-    unsigned int screen_width, screen_height;
+    INT screen_width, screen_height;
     Status status = RRSetConfigFailed;
     XRRScreenResources *resources;
     XRRCrtcInfo *crtc_info;
@@ -482,8 +486,8 @@ static LONG xrandr12_set_current_mode( int mode )
     }
 
     get_screen_size( resources, &screen_width, &screen_height );
-    screen_width = max( screen_width, crtc_info->x + dd_modes[mode].width );
-    screen_height = max( screen_height, crtc_info->y + dd_modes[mode].height );
+    screen_width = max( screen_width, crtc_info->x + (INT)dd_modes[mode].width );
+    screen_height = max( screen_height, crtc_info->y + (INT)dd_modes[mode].height );
 
     pXRRSetScreenSize( gdi_display, root_window, screen_width, screen_height,
             screen_width * DisplayWidthMM( gdi_display, default_visual.screen )
