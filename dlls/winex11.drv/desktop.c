@@ -22,6 +22,9 @@
 #include <X11/cursorfont.h>
 #include <X11/Xlib.h>
 
+#define NONAMELESSSTRUCT
+#define NONAMELESSUNION
+
 #include "x11drv.h"
 
 /* avoid conflict with field names in included win32 headers */
@@ -30,10 +33,6 @@
 #include "wine/heap.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(x11drv);
-
-/* data for resolution changing */
-static struct x11drv_mode_info *dd_modes;
-static unsigned int dd_mode_count;
 
 static unsigned int max_width;
 static unsigned int max_height;
@@ -86,70 +85,99 @@ BOOL is_virtual_desktop(void)
     return root_window != DefaultRootWindow( gdi_display );
 }
 
-/* create the mode structures */
-static void make_modes(void)
+/* Virtual desktop resolution settings handler */
+static BOOL X11DRV_desktop_get_id(const WCHAR *device_name, ULONG_PTR *id)
+{
+    WCHAR primary_adapter[CCHDEVICENAME];
+
+    if (!get_primary_adapter(primary_adapter) || lstrcmpW(primary_adapter, device_name))
+        return FALSE;
+
+    *id = 0;
+    return TRUE;
+}
+
+static void add_desktop_mode(DEVMODEW *mode, DWORD depth, DWORD width, DWORD height)
+{
+    mode->dmSize = sizeof(*mode);
+    mode->dmDriverExtra = 0;
+    mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS
+                     | DM_DISPLAYFREQUENCY;
+    mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+    mode->dmBitsPerPel = depth;
+    mode->dmPelsWidth = width;
+    mode->dmPelsHeight = height;
+    mode->u2.dmDisplayFlags = 0;
+    mode->dmDisplayFrequency = 60;
+}
+
+static BOOL X11DRV_desktop_get_modes(ULONG_PTR id, DWORD flags, DEVMODEW **new_modes, INT *mode_count)
 {
     RECT primary_rect = get_primary_monitor_rect();
-    unsigned int i;
     unsigned int screen_width = primary_rect.right - primary_rect.left;
     unsigned int screen_height = primary_rect.bottom - primary_rect.top;
+    INT depth, screen, mode_index = 0;
+    DEVMODEW *modes;
 
-    /* original specified desktop size */
-    X11DRV_Settings_AddOneMode(screen_width, screen_height, 0, 60);
-    for (i=0; i<ARRAY_SIZE(screen_sizes); i++)
+    /* Allocate space for modes in different color depths */
+    modes = heap_calloc((ARRAY_SIZE(screen_sizes) + 1 + 1) * DEPTH_COUNT, sizeof(*modes));
+    if (!modes)
     {
-        if ( (screen_sizes[i].width <= max_width) && (screen_sizes[i].height <= max_height) )
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
+
+    for (depth = 0; depth < DEPTH_COUNT; ++depth)
+    {
+        for (screen = 0; screen < ARRAY_SIZE(screen_sizes); ++screen)
         {
-            if ( ( (screen_sizes[i].width != max_width) || (screen_sizes[i].height != max_height) ) &&
-                 ( (screen_sizes[i].width != screen_width) || (screen_sizes[i].height != screen_height) ) )
-            {
-                /* only add them if they are smaller than the root window and unique */
-                X11DRV_Settings_AddOneMode(screen_sizes[i].width, screen_sizes[i].height, 0, 60);
-            }
+            if (screen_sizes[screen].width <= max_width && screen_sizes[screen].height <= max_height
+                    && (screen_sizes[screen].width != max_width || screen_sizes[screen].height != max_height)
+                    && (screen_sizes[screen].width != screen_width || screen_sizes[screen].height != screen_height))
+                add_desktop_mode(
+                        &modes[mode_index++], depths[depth], screen_sizes[screen].width, screen_sizes[screen].height);
         }
+
+        add_desktop_mode(&modes[mode_index++], depths[depth], screen_width, screen_height);
+        if (max_width != screen_width && max_height != screen_height)
+            add_desktop_mode(&modes[mode_index++], depths[depth], max_width, max_height);
     }
-    if ((max_width != screen_width) && (max_height != screen_height))
-    {
-        /* root window size (if different from desktop window) */
-        X11DRV_Settings_AddOneMode(max_width, max_height, 0, 60);
-    }
+
+    *new_modes = modes;
+    *mode_count = mode_index;
+    return TRUE;
 }
 
-static int X11DRV_desktop_GetCurrentMode(void)
+static void X11DRV_desktop_free_modes(DEVMODEW *modes)
 {
-    unsigned int i;
-    DWORD dwBpp = screen_bpp;
+    heap_free(modes);
+}
+
+static BOOL X11DRV_desktop_get_current_settings(ULONG_PTR id, DEVMODEW *mode)
+{
     RECT primary_rect = get_primary_monitor_rect();
 
-    for (i=0; i<dd_mode_count; i++)
-    {
-        if ( (primary_rect.right - primary_rect.left == dd_modes[i].width) &&
-             (primary_rect.bottom - primary_rect.top == dd_modes[i].height) &&
-             (dwBpp == dd_modes[i].bpp))
-            return i;
-    }
-    ERR("In unknown mode, returning default\n");
-    return 0;
+    mode->dmDriverExtra = 0;
+    mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS
+                     | DM_DISPLAYFREQUENCY | DM_POSITION;
+    mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+    mode->dmBitsPerPel = screen_bpp;
+    mode->dmPelsWidth = primary_rect.right - primary_rect.left;
+    mode->dmPelsHeight = primary_rect.bottom - primary_rect.top;
+    mode->u2.dmDisplayFlags = 0;
+    mode->dmDisplayFrequency = 60;
+    mode->u1.s2.dmPosition.x = 0;
+    mode->u1.s2.dmPosition.y = 0;
+    return TRUE;
 }
 
-static LONG X11DRV_desktop_SetCurrentMode(int mode)
+static LONG X11DRV_desktop_set_current_settings(ULONG_PTR id, DEVMODEW *mode)
 {
-    DWORD dwBpp = screen_bpp;
-    if (dwBpp != dd_modes[mode].bpp)
-    {
-        FIXME("Cannot change screen BPP from %d to %d\n", dwBpp, dd_modes[mode].bpp);
-        /* Ignore the depth mismatch
-         *
-         * Some (older) applications require a specific bit depth, this will allow them
-         * to run. X11drv performs a color depth conversion if needed.
-         */
-    }
-    TRACE("Resizing Wine desktop window to %dx%d\n", dd_modes[mode].width, dd_modes[mode].height);
+    if (mode->dmFields & DM_BITSPERPEL && mode->dmBitsPerPel != screen_bpp)
+        WARN("Cannot change screen color depth from %dbits to %dbits!\n", screen_bpp, mode->dmBitsPerPel);
 
-    desktop_width = dd_modes[mode].width;
-    desktop_height = dd_modes[mode].height;
-    X11DRV_DisplayDevices_Update( TRUE );
-
+    desktop_width = mode->dmPelsWidth;
+    desktop_height = mode->dmPelsHeight;
     return DISP_CHANGE_SUCCESSFUL;
 }
 
@@ -243,6 +271,7 @@ static void X11DRV_desktop_free_monitors( struct x11drv_monitor *monitors )
 void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height )
 {
     RECT primary_rect = get_host_primary_monitor_rect();
+    struct x11drv_settings_handler settings_handler;
 
     root_window = win;
     managed_mode = FALSE;  /* no managed windows in desktop mode */
@@ -264,13 +293,14 @@ void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height )
     X11DRV_DisplayDevices_Init( TRUE );
 
     /* initialize the available resolutions */
-    dd_modes = X11DRV_Settings_SetHandlers("desktop", 
-                                           X11DRV_desktop_GetCurrentMode, 
-                                           X11DRV_desktop_SetCurrentMode, 
-                                           ARRAY_SIZE(screen_sizes)+2, 1);
-    make_modes();
-    X11DRV_Settings_AddDepthModes();
-    dd_mode_count = X11DRV_Settings_GetModeCount();
+    settings_handler.name = "Virtual Desktop";
+    settings_handler.priority = 1000;
+    settings_handler.get_id = X11DRV_desktop_get_id;
+    settings_handler.get_modes = X11DRV_desktop_get_modes;
+    settings_handler.free_modes = X11DRV_desktop_free_modes;
+    settings_handler.get_current_settings = X11DRV_desktop_get_current_settings;
+    settings_handler.set_current_settings = X11DRV_desktop_set_current_settings;
+    X11DRV_Settings_SetHandler( &settings_handler );
 }
 
 
