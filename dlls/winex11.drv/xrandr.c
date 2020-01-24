@@ -1329,12 +1329,11 @@ static LONG xrandr14_set_current_settings( ULONG_PTR id, DEVMODEW *mode )
     XRRCrtcInfo *crtc_info = NULL;
     LONG ret = DISP_CHANGE_FAILED;
     Rotation rotation;
-    RECT primary_rect;
     INT output_count;
     RRCrtc crtc = 0;
     Status status;
     RRMode rrmode;
-    INT x, y, i;
+    INT i;
 
     if (mode->dmFields & DM_BITSPERPEL && mode->dmBitsPerPel != screen_bpp)
         WARN("Cannot change screen color depth from %ubits to %ubits!\n", screen_bpp, mode->dmBitsPerPel);
@@ -1402,11 +1401,6 @@ static LONG xrandr14_set_current_settings( ULONG_PTR id, DEVMODEW *mode )
     if (!crtc_info)
         goto done;
 
-    /* Convert virtual screen coordinates to RandR coordinates */
-    primary_rect = get_primary_rect( screen_resources );
-    x = mode->u1.s2.dmPosition.x + primary_rect.left;
-    y = mode->u1.s2.dmPosition.y + primary_rect.top;
-
     assert(mode->dmDriverExtra == sizeof(RRMode));
     rrmode = *((RRMode *)((BYTE *)mode + sizeof(*mode)));
 
@@ -1424,8 +1418,8 @@ static LONG xrandr14_set_current_settings( ULONG_PTR id, DEVMODEW *mode )
     }
 
     get_screen_size( screen_resources, &screen_width, &screen_height );
-    screen_width = max(screen_width, x + (INT)mode->dmPelsWidth);
-    screen_height = max(screen_height, y + (INT)mode->dmPelsHeight);
+    screen_width = max(screen_width, (INT)mode->u1.s2.dmPosition.x + (INT)mode->dmPelsWidth);
+    screen_height = max(screen_height, (INT)mode->u1.s2.dmPosition.y + (INT)mode->dmPelsHeight);
 
     pXRRSetScreenSize( gdi_display, root_window, screen_width, screen_height,
                        screen_width * DisplayWidthMM(gdi_display, default_visual.screen)
@@ -1433,8 +1427,8 @@ static LONG xrandr14_set_current_settings( ULONG_PTR id, DEVMODEW *mode )
                        screen_height * DisplayHeightMM(gdi_display, default_visual.screen)
                                / DisplayHeight(gdi_display, default_visual.screen) );
 
-    status = pXRRSetCrtcConfig( gdi_display, screen_resources, crtc, CurrentTime, x, y, rrmode, rotation,
-                                outputs, output_count );
+    status = pXRRSetCrtcConfig( gdi_display, screen_resources, crtc, CurrentTime, mode->u1.s2.dmPosition.x,
+                                mode->u1.s2.dmPosition.y, rrmode, rotation, outputs, output_count );
     if (status == RRSetConfigSuccess)
         ret = DISP_CHANGE_SUCCESSFUL;
 
@@ -1447,6 +1441,24 @@ done:
         pXRRFreeOutputInfo( output_info );
     pXRRFreeScreenResources( screen_resources );
     return ret;
+}
+
+static void xrandr14_convert_coordinates( struct x11drv_adapter_setting *settings, INT count )
+{
+    INT left = INT_MAX, top = INT_MAX;
+    INT i;
+
+    for (i = 0; i < count; ++i)
+    {
+        left = min(left, settings[i].mode.u1.s2.dmPosition.x);
+        top = min(top, settings[i].mode.u1.s2.dmPosition.y);
+    }
+
+    for (i = 0; i < count; ++i)
+    {
+        settings[i].mode.u1.s2.dmPosition.x -= left;
+        settings[i].mode.u1.s2.dmPosition.y -= top;
+    }
 }
 
 #endif
@@ -1495,6 +1507,7 @@ void X11DRV_XRandR_Init(void)
         settings_handler.free_modes = xrandr14_free_modes;
         settings_handler.get_current_settings = xrandr14_get_current_settings;
         settings_handler.set_current_settings = xrandr14_set_current_settings;
+        settings_handler.convert_coordinates = xrandr14_convert_coordinates;
         X11DRV_Settings_SetHandler( &settings_handler );
     }
 #endif

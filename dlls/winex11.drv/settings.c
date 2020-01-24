@@ -884,6 +884,486 @@ static DEVMODEW *get_full_mode(DEVMODEW *driver_modes, INT driver_mode_count, DE
     return found;
 }
 
+static INT offset_length(POINT offset)
+{
+    return offset.x * offset.x + offset.y * offset.y;
+}
+
+static BOOL next_to_rect(const RECT *center, const RECT *side)
+{
+    /* Left/Right side */
+    if ((side->right == center->left || side->left == center->right) &&
+        side->top >= center->bottom && side->bottom <= center->top)
+        return TRUE;
+
+    /* Top/Bottom side */
+    if ((side->bottom == center->top || side->top == center->bottom) &&
+        side->left <= center->right && side->right >= center->left)
+        return TRUE;
+
+    return FALSE;
+}
+
+/* Check if a rect overlaps with placed adapters */
+static BOOL overlap_placed_adapters(const struct x11drv_adapter_setting *adapters, INT count, const RECT *rect)
+{
+    RECT intersect;
+    INT i;
+
+    for (i = 0; i < count; ++i)
+    {
+        if (!adapters[i].placed)
+            continue;
+
+        if (IntersectRect(&intersect, &adapters[i].new_rect, rect))
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+/* Get the offset with minimum length to place an adapter next to the placed adapters without extra space and overlapping */
+static POINT get_placement_offset(const struct x11drv_adapter_setting *adapters, INT count, INT placing_index,
+                                  INT changing_index)
+{
+    INT left_most = INT_MAX, right_most = INT_MIN;
+    INT top_most = INT_MAX, bottom_most = INT_MIN;
+    INT adapter_index, point_index, corner_index;
+    POINT points[4], offset, min_offset = {0, 0};
+    BOOL has_placed = FALSE, first = TRUE;
+    INT width, height;
+    RECT rect;
+
+    /* If the adapter to be placed is detached, no offset is needed to place it */
+    if (IsRectEmpty(&adapters[placing_index].old_rect))
+        return min_offset;
+
+    /* If there is no placed and attached adapter, place this adapter as it was */
+    for (adapter_index = 0; adapter_index < count; ++adapter_index)
+    {
+        if (adapters[adapter_index].placed && !IsRectEmpty(&adapters[adapter_index].new_rect))
+        {
+            has_placed = TRUE;
+            break;
+        }
+    }
+
+    if (!has_placed)
+        return min_offset;
+
+    /* If the old_rect of the adapter to be placed is next to a placed adapter and
+     * there is no overlapping with the placed adapters, then place this adapter as it was */
+    for (adapter_index = 0; adapter_index < count; ++adapter_index)
+    {
+        if (adapters[adapter_index].placed
+            && next_to_rect(&adapters[adapter_index].new_rect, &adapters[placing_index].old_rect)
+            && !overlap_placed_adapters(adapters, count, &adapters[placing_index].old_rect))
+            return min_offset;
+    }
+
+    /* Try to place this adapter next to the placed adapter it was next to if possible */
+    for (adapter_index = 0; adapter_index < count; ++adapter_index)
+    {
+        /* Was next to the changing adapter doesn't count */
+        if (changing_index == adapter_index)
+            continue;
+
+        /* If this adapter was next to a placed adapter before the adapter was placed */
+        if (adapters[adapter_index].placed && !IsRectEmpty(&adapters[adapter_index].old_rect)
+            && next_to_rect(&adapters[adapter_index].old_rect, &adapters[placing_index].old_rect))
+        {
+            /* Try to place this adapter with the same offset used by the placed monitor */
+            offset.x = adapters[adapter_index].new_rect.left - adapters[adapter_index].old_rect.left;
+            offset.y = adapters[adapter_index].new_rect.top - adapters[adapter_index].old_rect.top;
+            rect = adapters[placing_index].old_rect;
+            OffsetRect(&rect, offset.x, offset.y);
+
+            /* Check if this offset will cause overlapping */
+            if (!overlap_placed_adapters(adapters, count, &rect))
+                return offset;
+        }
+    }
+
+    /* Try to place this adapter with each of its four corners to every corner of the placed adapters
+     * and see which combination has the minimum offset length */
+    width = adapters[placing_index].old_rect.right - adapters[placing_index].old_rect.left;
+    height = adapters[placing_index].old_rect.bottom - adapters[placing_index].old_rect.top;
+
+    for (adapter_index = 0; adapter_index < count; ++adapter_index)
+    {
+        if (!adapters[adapter_index].placed || IsRectEmpty(&adapters[adapter_index].new_rect))
+            continue;
+
+        /* Get four points of the placed adapter rectangle */
+        points[0].x = adapters[adapter_index].new_rect.left;
+        points[0].y = adapters[adapter_index].new_rect.top;
+        points[1].x = adapters[adapter_index].new_rect.left;
+        points[1].y = adapters[adapter_index].new_rect.bottom;
+        points[2].x = adapters[adapter_index].new_rect.right;
+        points[2].y = adapters[adapter_index].new_rect.top;
+        points[3].x = adapters[adapter_index].new_rect.right;
+        points[3].y = adapters[adapter_index].new_rect.bottom;
+
+        /* Try each of the four points */
+        for (point_index = 0; point_index < 4; ++point_index)
+        {
+            /* Try moving each of the four corners of the current adapter rectangle to the point */
+            for (corner_index = 0; corner_index < 4; ++corner_index)
+            {
+                switch (corner_index)
+                {
+                case 0:
+                    offset.x = points[point_index].x - width;
+                    offset.y = points[point_index].y - height;
+                    break;
+                case 1:
+                    offset.x = points[point_index].x;
+                    offset.y = points[point_index].y - height;
+                    break;
+                case 2:
+                    offset.x = points[point_index].x - width;
+                    offset.y = points[point_index].y;
+                    break;
+                case 3:
+                    offset.x = points[point_index].x;
+                    offset.y = points[point_index].y;
+                    break;
+                }
+
+                offset.x -= adapters[placing_index].old_rect.left;
+                offset.y -= adapters[placing_index].old_rect.top;
+
+                rect = adapters[placing_index].old_rect;
+                OffsetRect(&rect, offset.x, offset.y);
+
+                if (!overlap_placed_adapters(adapters, count, &rect))
+                {
+                    if (first)
+                    {
+                        min_offset = offset;
+                        first = FALSE;
+                    }
+
+                    if (offset_length(offset) < offset_length(min_offset))
+                        min_offset = offset;
+                }
+            }
+        }
+    }
+
+    /* Finally, try to move straight in four directions. They may get an offset with smaller movement */
+    for (adapter_index = 0; adapter_index < count; ++adapter_index)
+    {
+        if (!adapters[adapter_index].placed || IsRectEmpty(&adapters[adapter_index].new_rect))
+            continue;
+
+        /* Check that this placed adapter is directly at the left/right/top/bottom side of the current adapter */
+        points[0].x = max(adapters[placing_index].old_rect.left, adapters[adapter_index].new_rect.left);
+        points[1].x = min(adapters[placing_index].old_rect.right, adapters[adapter_index].new_rect.right);
+        points[0].y = max(adapters[placing_index].old_rect.top, adapters[adapter_index].new_rect.top);
+        points[1].y = min(adapters[placing_index].old_rect.bottom, adapters[adapter_index].new_rect.bottom);
+
+        if (points[0].x <= points[1].x)
+        {
+            top_most = min(top_most, adapters[adapter_index].new_rect.top);
+            bottom_most = max(bottom_most, adapters[adapter_index].new_rect.bottom);
+        }
+
+        if (points[0].y <= points[1].y)
+        {
+            left_most = min(left_most, adapters[adapter_index].new_rect.left);
+            right_most = max(right_most, adapters[adapter_index].new_rect.right);
+        }
+    }
+
+    offset.x = INT_MAX;
+    offset.y = INT_MAX;
+
+    /* Move to the left side if movement is smaller than moving to the right side */
+    if (left_most != INT_MAX && right_most != INT_MIN)
+    {
+        if (abs(left_most - width - adapters[placing_index].old_rect.left)
+            <= abs(right_most - adapters[placing_index].old_rect.left))
+            offset.x = left_most - width - adapters[placing_index].old_rect.left;
+        else
+            offset.x = right_most - adapters[placing_index].old_rect.left;
+    }
+
+
+    /* Move to the top side if movement is smaller than moving to the bottom side */
+    if (top_most != INT_MAX && bottom_most != INT_MIN)
+    {
+        if (abs(top_most - height - adapters[placing_index].old_rect.top)
+            <= abs(bottom_most - adapters[placing_index].old_rect.top))
+            offset.y = top_most - height - adapters[placing_index].old_rect.top;
+        else
+            offset.y = bottom_most - adapters[placing_index].old_rect.top;
+    }
+
+    /* Move horizontally if movement is smaller than moving vertically */
+    if (abs(offset.x) <= abs(offset.y))
+        offset.y = 0;
+    else
+        offset.x = 0;
+
+    if (offset.x != INT_MAX && offset.y != INT_MAX && offset_length(offset) < offset_length(min_offset))
+        min_offset = offset;
+
+    return min_offset;
+}
+
+static LONG load_adapter_settings(struct x11drv_adapter_setting **new_adapters, INT *new_adapter_count,
+                                  const WCHAR *device_name, DEVMODEW *user_mode, BOOL from_registry,
+                                  INT *changing_index)
+{
+    DEVMODEW *modes = NULL, *full_mode, current_mode;
+    INT adapter_index, adapter_count = 0, mode_count;
+    struct x11drv_adapter_setting *adapters;
+    DISPLAY_DEVICEW ddW;
+
+    ddW.cb = sizeof(ddW);
+    for (adapter_index = 0; EnumDisplayDevicesW(NULL, adapter_index, &ddW, 0); ++adapter_index)
+        ++adapter_count;
+
+    adapters = heap_calloc(adapter_count, sizeof(*adapters));
+    if (!adapters)
+        goto done;
+
+    for (adapter_index = 0; adapter_index < adapter_count; ++adapter_index)
+    {
+        if (!EnumDisplayDevicesW(NULL, adapter_index, &ddW, 0))
+            goto done;
+
+        if (!handler.get_id(ddW.DeviceName, &adapters[adapter_index].id))
+            goto done;
+
+        if (from_registry)
+        {
+            adapters[adapter_index].mode.dmSize = sizeof(adapters[adapter_index].mode);
+            if (!EnumDisplaySettingsExW(ddW.DeviceName, ENUM_REGISTRY_SETTINGS, &adapters[adapter_index].mode, 0))
+                goto done;
+        }
+        else if (!lstrcmpiW(device_name, ddW.DeviceName))
+        {
+            if (is_detached_mode(user_mode))
+            {
+                full_mode = user_mode;
+            }
+            else
+            {
+                if (!handler.get_modes(adapters[adapter_index].id, 0, &modes, &mode_count))
+                    goto done;
+
+                full_mode = get_full_mode(modes, mode_count, user_mode);
+                if (!full_mode)
+                {
+                    handler.free_modes(modes);
+                    return DISP_CHANGE_BADMODE;
+                }
+
+                if (!(user_mode->dmFields & DM_POSITION))
+                {
+                    current_mode.dmSize = sizeof(current_mode);
+                    if (!EnumDisplaySettingsExW(ddW.DeviceName, ENUM_CURRENT_SETTINGS, &current_mode, 0))
+                    {
+                        handler.free_modes(modes);
+                        goto done;
+                    }
+
+                    full_mode->dmFields |= DM_POSITION;
+                    full_mode->u1.s2.dmPosition = current_mode.u1.s2.dmPosition;
+                }
+            }
+
+            adapters[adapter_index].mode = *full_mode;
+            *changing_index = adapter_index;
+            if (modes)
+            {
+                handler.free_modes(modes);
+                modes = NULL;
+            }
+        }
+        else
+        {
+            adapters[adapter_index].mode.dmSize = sizeof(adapters[adapter_index].mode);
+            if (!EnumDisplaySettingsExW(ddW.DeviceName, ENUM_CURRENT_SETTINGS, &adapters[adapter_index].mode, 0))
+                goto done;
+        }
+
+        adapters[adapter_index].old_rect.left = adapters[adapter_index].mode.u1.s2.dmPosition.x;
+        adapters[adapter_index].old_rect.top = adapters[adapter_index].mode.u1.s2.dmPosition.y;
+        adapters[adapter_index].old_rect.right = adapters[adapter_index].old_rect.left + adapters[adapter_index].mode.dmPelsWidth;
+        adapters[adapter_index].old_rect.bottom = adapters[adapter_index].old_rect.top + adapters[adapter_index].mode.dmPelsHeight;
+    }
+
+    *new_adapters = adapters;
+    *new_adapter_count = adapter_count;
+    return DISP_CHANGE_SUCCESSFUL;
+
+done:
+    heap_free(adapters);
+    return DISP_CHANGE_FAILED;
+}
+
+static BOOL conflict_registry_settings(const struct x11drv_adapter_setting *adapters, INT count)
+{
+    RECT intersect;
+    INT i, j;
+
+    for (i = 0; i < count; ++i)
+    {
+        for (j = i + 1; j < count; ++j)
+        {
+            if (IntersectRect(&intersect, &adapters[i].old_rect, &adapters[j].old_rect))
+                return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+static BOOL conflict_dynamic_settings(const struct x11drv_adapter_setting *adapters, INT adapter_count, INT changing_index)
+{
+    RECT intersect;
+    INT adapter_index;
+
+    for (adapter_index = 0; adapter_index < adapter_count; ++adapter_index)
+    {
+        if (adapter_index == changing_index)
+            continue;
+
+        if (IntersectRect(&intersect, &adapters[adapter_index].old_rect, &adapters[changing_index].new_rect))
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+
+static BOOL all_detached_settings(const struct x11drv_adapter_setting *adapters, INT adapter_count)
+{
+    INT attached_count = 0;
+    INT i;
+
+    for (i = 0; i < adapter_count; ++i)
+    {
+        if (!is_detached_mode(&adapters->mode))
+            ++attached_count;
+    }
+
+    return attached_count == 0;
+}
+
+static void place_changing_adapter(struct x11drv_adapter_setting *changing_adapter, DEVMODEW *user_mode)
+{
+    if (user_mode->dmFields & DM_POSITION)
+    {
+        changing_adapter->new_rect.left = user_mode->u1.s2.dmPosition.x;
+        changing_adapter->new_rect.top = user_mode->u1.s2.dmPosition.y;
+    }
+    else
+    {
+        changing_adapter->new_rect.left = changing_adapter->old_rect.left;
+        changing_adapter->new_rect.top = changing_adapter->old_rect.top;
+    }
+
+    changing_adapter->new_rect.right = changing_adapter->new_rect.left + user_mode->dmPelsWidth;
+    changing_adapter->new_rect.bottom = changing_adapter->new_rect.top + user_mode->dmPelsHeight;
+    changing_adapter->placed = TRUE;
+}
+
+static void place_all_adapters(struct x11drv_adapter_setting *adapters, INT adapter_count, INT changing_index)
+{
+    POINT min_offset, offset;
+    INT placing_index;
+    INT adapter_index;
+
+    /* Place all other adapters with no extra space between them and no overlapping */
+    while (1)
+    {
+        /* Place the unplaced adapter with the minimum offset length first */
+        placing_index = -1;
+        for (adapter_index = 0; adapter_index < adapter_count; ++adapter_index)
+        {
+            if (adapters[adapter_index].placed)
+                continue;
+
+            offset = get_placement_offset(adapters, adapter_count, adapter_index, changing_index);
+            if (placing_index == -1 || offset_length(offset) < offset_length(min_offset))
+            {
+                min_offset = offset;
+                placing_index = adapter_index;
+            }
+        }
+
+        /* If all adapters are placed */
+        if (placing_index == -1)
+            break;
+
+        adapters[placing_index].new_rect = adapters[placing_index].old_rect;
+        OffsetRect(&adapters[placing_index].new_rect, min_offset.x, min_offset.y);
+        adapters[placing_index].placed = TRUE;
+    }
+
+    for (adapter_index = 0; adapter_index < adapter_count; ++adapter_index)
+    {
+        adapters[adapter_index].mode.u1.s2.dmPosition.x = adapters[adapter_index].new_rect.left;
+        adapters[adapter_index].mode.u1.s2.dmPosition.y = adapters[adapter_index].new_rect.top;
+    }
+
+    if (handler.convert_coordinates)
+        handler.convert_coordinates(adapters, adapter_count);
+}
+
+static LONG apply_adapter_settings(struct x11drv_adapter_setting *adapters, INT count, const WCHAR *devname,
+                                   BOOL dettach)
+{
+    DEVMODEW *driver_modes = NULL, *full_mode;
+    INT driver_mode_count;
+    LONG ret;
+    INT i;
+
+    for (i = 0; i < count; ++i)
+    {
+        if (is_detached_mode(&adapters[i].mode) != dettach)
+            continue;
+
+        if (dettach)
+        {
+            full_mode = &adapters[i].mode;
+        }
+        else
+        {
+            /* Find a mode that has all the required fields */
+            if (!handler.get_modes(adapters[i].id, 0, &driver_modes, &driver_mode_count))
+                return DISP_CHANGE_FAILED;
+
+            full_mode = get_full_mode(driver_modes, driver_mode_count, &adapters[i].mode);
+            if (!full_mode)
+            {
+                handler.free_modes(driver_modes);
+                return DISP_CHANGE_FAILED;
+            }
+        }
+
+        TRACE("handler:%s device:%s to position:(%d,%d) resolution:%dx%d frequency:%dHz depth:%dbits orientation:%s\n",
+              handler.name, wine_dbgstr_w(devname), full_mode->u1.s2.dmPosition.x, full_mode->u1.s2.dmPosition.y,
+              full_mode->dmPelsWidth, full_mode->dmPelsHeight, full_mode->dmDisplayFrequency, full_mode->dmBitsPerPel,
+              orientation_text[full_mode->u1.s2.dmDisplayOrientation]);
+
+        ret = handler.set_current_settings(adapters[i].id, full_mode);
+        if (driver_modes)
+        {
+            handler.free_modes(driver_modes);
+            driver_modes = NULL;
+        }
+        if (ret != DISP_CHANGE_SUCCESSFUL)
+            return ret;
+    }
+
+    return DISP_CHANGE_SUCCESSFUL;
+}
+
 /***********************************************************************
  *		ChangeDisplaySettingsEx  (X11DRV.@)
  *
@@ -891,99 +1371,64 @@ static DEVMODEW *get_full_mode(DEVMODEW *driver_modes, INT driver_mode_count, DE
 LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
                                            HWND hwnd, DWORD flags, LPVOID lpvoid )
 {
+    struct x11drv_adapter_setting *adapters;
     WCHAR primary_adapter[CCHDEVICENAME];
     char bpp_buffer[16], freq_buffer[18];
-    DEVMODEW *driver_modes = NULL, *full_mode;
+    INT changing_index = -1;
     DEVMODEW default_mode;
-    INT driver_mode_count;
-    ULONG_PTR id;
-    BOOL ret;
+    BOOL from_registry;
+    INT adapter_count;
+    LONG ret;
     INT i;
  
     /* Use new interface if possible */
     if (!handler.name)
         goto old_interface;
 
-    if (!get_primary_adapter(primary_adapter))
-        return DISP_CHANGE_FAILED;
+    from_registry = !devname && !devmode;
 
-    if (!devname && !devmode)
-    {
-        default_mode.dmSize = sizeof(default_mode);
-        if (!EnumDisplaySettingsExW(primary_adapter, ENUM_REGISTRY_SETTINGS, &default_mode, 0))
-        {
-            ERR("Default mode not found for %s!\n", wine_dbgstr_w(primary_adapter));
-            return DISP_CHANGE_BADMODE;
-        }
-
-        devname = primary_adapter;
-        devmode = &default_mode;
-    }
-
-    if (flags & CDS_UPDATEREGISTRY && !write_registry_settings(devname, devmode))
+    if (!from_registry && flags & CDS_UPDATEREGISTRY && !write_registry_settings(devname, devmode))
         return DISP_CHANGE_NOTUPDATED;
 
     if (flags & (CDS_TEST | CDS_NORESET))
         return DISP_CHANGE_SUCCESSFUL;
 
-    if (!handler.get_id(devname, &id))
-        goto fail;
+    ret = load_adapter_settings(&adapters, &adapter_count, devname, devmode, from_registry, &changing_index);
+    if (ret != DISP_CHANGE_SUCCESSFUL)
+        return ret;
 
-    if (is_detached_mode(devmode))
+    /* Can't detach all adapters */
+    if (all_detached_settings(adapters, adapter_count))
     {
-        INT attached_count = 0;
-        DISPLAY_DEVICEW dd;
+        heap_free(adapters);
+        return DISP_CHANGE_SUCCESSFUL;
+    }
 
-        dd.cb = sizeof(dd);
-        for (i = 0; EnumDisplayDevicesW(NULL, i, &dd, 0); ++i)
+    if (from_registry && conflict_registry_settings(adapters, adapter_count))
+    {
+        heap_free(adapters);
+        return DISP_CHANGE_SUCCESSFUL;
+    }
+
+    if (!from_registry)
+    {
+        place_changing_adapter(&adapters[changing_index], devmode);
+
+        if (devmode->dmFields & DM_POSITION && conflict_dynamic_settings(adapters, adapter_count, changing_index))
         {
-            if (dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)
-                ++attached_count;
-        }
-
-        /* Can't detach the only attached adapter */
-        if (attached_count <= 1)
+            heap_free(adapters);
             return DISP_CHANGE_SUCCESSFUL;
-
-        full_mode = devmode;
-    }
-    else
-    {
-        /* Find a mode that has all the required fields */
-        if (!handler.get_modes(id, 0, &driver_modes, &driver_mode_count))
-            goto fail;
-
-        full_mode = get_full_mode(driver_modes, driver_mode_count, devmode);
-        if (!full_mode)
-        {
-            handler.free_modes(driver_modes);
-            goto fail;
-        }
-
-        if (!(devmode->dmFields & DM_POSITION))
-        {
-            DEVMODEW current_mode;
-    
-            current_mode.dmSize = sizeof(current_mode);
-            if (!EnumDisplaySettingsExW(devname, ENUM_CURRENT_SETTINGS, &current_mode, 0))
-            {
-                handler.free_modes(driver_modes);
-                goto fail;
-            }
-    
-            full_mode->dmFields |= DM_POSITION;
-            full_mode->u1.s2.dmPosition = current_mode.u1.s2.dmPosition;
         }
     }
 
-    TRACE("handler:%s device:%s to position:(%d,%d) resolution:%dx%d frequency:%dHz depth:%dbits orientation:%s\n",
-          handler.name, wine_dbgstr_w(devname), full_mode->u1.s2.dmPosition.x, full_mode->u1.s2.dmPosition.y,
-          full_mode->dmPelsWidth, full_mode->dmPelsHeight, full_mode->dmDisplayFrequency, full_mode->dmBitsPerPel,
-          orientation_text[full_mode->u1.s2.dmDisplayOrientation]);
+    place_all_adapters(adapters, adapter_count, changing_index);
 
-    ret = handler.set_current_settings(id, full_mode);
-    if (driver_modes)
-        handler.free_modes(driver_modes);
+    /* Detach adapter first to free up CRTC */
+    ret = apply_adapter_settings(adapters, adapter_count, devname, TRUE);
+    if (ret == DISP_CHANGE_SUCCESSFUL)
+        ret = apply_adapter_settings(adapters, adapter_count, devname, FALSE);
+
+    heap_free(adapters);
     if (ret == DISP_CHANGE_SUCCESSFUL)
         X11DRV_DisplayDevices_Update(TRUE);
     return ret;
@@ -1052,7 +1497,6 @@ old_interface:
         return DISP_CHANGE_SUCCESSFUL;
     }
 
-fail:
     /* no valid modes found, only print the fields we were trying to matching against */
     bpp_buffer[0] = freq_buffer[0] = 0;
     if (devmode->dmFields & DM_BITSPERPEL)
