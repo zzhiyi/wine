@@ -533,6 +533,26 @@ static XRRCrtcInfo *xrandr12_get_primary_crtc_info( XRRScreenResources *resource
     return NULL;
 }
 
+static DWORD get_frequency( const XRRModeInfo *mode )
+{
+    if (mode->hTotal && mode->vTotal)
+    {
+        double v_total = mode->vTotal;
+
+        if (mode->modeFlags & RR_DoubleScan)
+            v_total *= 2;
+        if (mode->modeFlags & RR_Interlace)
+            v_total /= 2;
+
+        /* Adding 0.05 instead of 0.5 to round so that common frequencies like
+         * 59.94Hz and 23.976Hz become 59Hz and 24Hz. Using 0.5 would make
+         * 59.94Hz become 60Hz and would make it seem like there are two 60Hz modes */
+        return mode->dotClock / (mode->hTotal * v_total) + 0.05;
+    }
+
+    return 0;
+}
+
 static int xrandr12_init_modes(void)
 {
     unsigned int only_one_resolution = 1, mode_count, primary_width, primary_height;
@@ -540,7 +560,7 @@ static int xrandr12_init_modes(void)
     XRROutputInfo *output_info;
     XRRModeInfo *primary_mode = NULL;
     XRRCrtcInfo *crtc_info;
-    unsigned int primary_refresh, primary_dots;
+    unsigned int primary_refresh;
     int ret = -1;
     int i, j;
 
@@ -594,8 +614,7 @@ static int xrandr12_init_modes(void)
 
     if(primary_mode)
     {
-        primary_dots = primary_mode->hTotal * primary_mode->vTotal;
-        primary_refresh = primary_dots ? (primary_mode->dotClock + primary_dots / 2) / primary_dots : 0;
+        primary_refresh = get_frequency(primary_mode);;
         primary_width = primary_mode->width;
         primary_height = primary_mode->height;
 
