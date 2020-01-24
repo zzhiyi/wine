@@ -293,11 +293,6 @@ void X11DRV_Settings_SetRealMode(unsigned int w, unsigned int h)
     TRACE("Set realMode to %d\n", realMode);
 }
 
-static int X11DRV_nores_GetCurrentMode(void)
-{
-    return currentMode;
-}
-
 BOOL fs_hack_enabled(void)
 {
     return currentMode >= 0 &&
@@ -436,81 +431,6 @@ void fs_hack_rgndata_user_to_real(RGNDATA *data)
     }
 }
 
-static LONG X11DRV_nores_SetCurrentMode(int mode)
-{
-    if (mode >= dd_mode_count)
-       return DISP_CHANGE_FAILED;
-
-    currentMode = mode;
-    TRACE("set current mode to: %ux%u\n",
-            dd_modes[currentMode].width,
-            dd_modes[currentMode].height);
-    if(currentMode == 0){
-        fs_hack_user_to_real_w = 1.;
-        fs_hack_user_to_real_h = 1.;
-        fs_hack_real_to_user_w = 1.;
-        fs_hack_real_to_user_h = 1.;
-        offs_x = offs_y = 0;
-        fs_width = dd_modes[currentMode].width;
-        fs_height = dd_modes[currentMode].height;
-    }else{
-        double w = dd_modes[currentMode].width;
-        double h = dd_modes[currentMode].height;
-
-        if(fs_hack_is_integer()){
-            unsigned int scaleFactor = min(dd_modes[realMode].width / w,
-                                           dd_modes[realMode].height / h);
-
-            w *= scaleFactor;
-            h *= scaleFactor;
-
-            offs_x = (dd_modes[realMode].width  - w) / 2;
-            offs_y = (dd_modes[realMode].height - h) / 2;
-
-            fs_width  = dd_modes[realMode].width;
-            fs_height = dd_modes[realMode].height;
-        }else if(dd_modes[realMode].width / (double)dd_modes[realMode].height < w / h){ /* real mode is narrower than fake mode */
-            /* scale to fit width */
-            h = dd_modes[realMode].width * (h / w);
-            w = dd_modes[realMode].width;
-            offs_x = 0;
-            offs_y = (dd_modes[realMode].height - h) / 2;
-            fs_width = dd_modes[realMode].width;
-            fs_height = (int)h;
-        }else{
-            /* scale to fit height */
-            w = dd_modes[realMode].height * (w / h);
-            h = dd_modes[realMode].height;
-            offs_x = (dd_modes[realMode].width - w) / 2;
-            offs_y = 0;
-            fs_width = (int)w;
-            fs_height = dd_modes[realMode].height;
-        }
-        fs_hack_user_to_real_w = w / (double)dd_modes[currentMode].width;
-        fs_hack_user_to_real_h = h / (double)dd_modes[currentMode].height;
-        fs_hack_real_to_user_w = dd_modes[currentMode].width / (double)w;
-        fs_hack_real_to_user_h = dd_modes[currentMode].height / (double)h;
-    }
-
-    X11DRV_DisplayDevices_Update(TRUE);
-    return DISP_CHANGE_SUCCESSFUL;
-}
-
-void fs_hack_choose_mode(int w, int h)
-{
-    unsigned int i;
-
-    for(i = 0; i < dd_mode_count; ++i)
-    {
-        if(dd_modes[i].width == w &&
-                dd_modes[i].height == h)
-        {
-            X11DRV_nores_SetCurrentMode(i);
-            break;
-        }
-    }
-}
-
 POINT fs_hack_current_mode(void)
 {
     POINT ret = { dd_modes[currentMode].width,
@@ -525,17 +445,110 @@ POINT fs_hack_real_mode(void)
     return ret;
 }
 
-void X11DRV_Settings_Init(void)
+static BOOL nores_get_id(const WCHAR *device_name, ULONG_PTR *id)
+{
+    static const WCHAR displayW[] = {'\\', '\\', '.', '\\', 'D', 'I', 'S', 'P', 'L', 'A', 'Y'};
+    WCHAR primary_adapter[CCHDEVICENAME];
+    WCHAR *end_ptr;
+
+    /* Device name has to be \\.\DISPLAY%d */
+    if (strncmpiW(device_name, displayW, ARRAY_SIZE(displayW)))
+        return FALSE;
+
+    strtolW(device_name + ARRAY_SIZE(displayW), &end_ptr, 10);
+    if (*end_ptr)
+        return FALSE;
+
+    if (!get_primary_adapter(primary_adapter))
+        return FALSE;
+
+    *id = !lstrcmpiW(device_name, primary_adapter) ? 1 : 0;
+    return TRUE;
+}
+
+static BOOL nores_get_modes(ULONG_PTR id, DWORD flags, DEVMODEW **new_modes, INT *mode_count)
+{
+    RECT primary = get_host_primary_monitor_rect();
+    DEVMODEW *modes;
+
+    modes = heap_calloc(1, sizeof(*modes));
+    if (!modes)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
+
+    modes[0].dmSize = sizeof(*modes);
+    modes[0].dmDriverExtra = 0;
+    modes[0].dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS
+                        | DM_DISPLAYFREQUENCY;
+    modes[0].u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+    modes[0].dmBitsPerPel = screen_bpp;
+    modes[0].dmPelsWidth = primary.right;
+    modes[0].dmPelsHeight = primary.bottom;
+    modes[0].u2.dmDisplayFlags = 0;
+    modes[0].dmDisplayFrequency = 60;
+
+    *new_modes = modes;
+    *mode_count = 1;
+    return TRUE;
+}
+
+static void nores_free_modes(DEVMODEW *modes)
+{
+    heap_free(modes);
+}
+
+static BOOL nores_get_current_settings(ULONG_PTR id, DEVMODEW *mode)
 {
     RECT primary = get_host_primary_monitor_rect();
 
+    mode->dmDriverExtra = 0;
+    mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS
+                     | DM_DISPLAYFREQUENCY | DM_POSITION;
+    mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+    mode->u2.dmDisplayFlags = 0;
+    mode->u1.s2.dmPosition.x = 0;
+    mode->u1.s2.dmPosition.y = 0;
+
+    if (!id)
+    {
+        FIXME("Non-primary adapters are unsupported.\n");
+        mode->dmBitsPerPel = 0;
+        mode->dmPelsWidth = 0;
+        mode->dmPelsHeight = 0;
+        mode->dmDisplayFrequency = 0;
+        return TRUE;
+    }
+
+    mode->dmBitsPerPel = screen_bpp;
+    mode->dmPelsWidth = primary.right;
+    mode->dmPelsHeight = primary.bottom;
+    mode->dmDisplayFrequency = 60;
+    return TRUE;
+}
+
+static LONG nores_set_current_settings(ULONG_PTR id, DEVMODEW *mode)
+{
+    WARN("NoRes settings handler, ignoring mode change request.\n");
+    return DISP_CHANGE_SUCCESSFUL;
+}
+
+void X11DRV_Settings_Init(void)
+{
+    struct x11drv_settings_handler nores_handler;
+
     depths = screen_bpp == 32 ? depths_32 : depths_24;
 
-    X11DRV_Settings_SetHandlers("NoRes", 
-                                X11DRV_nores_GetCurrentMode, 
-                                X11DRV_nores_SetCurrentMode, 
-                                1, 0);
-    X11DRV_Settings_AddOneMode( primary.right - primary.left, primary.bottom - primary.top, 0, 60);
+    nores_handler.name = "NoRes";
+    nores_handler.priority = 0;
+    nores_handler.get_id = nores_get_id;
+    nores_handler.get_modes = nores_get_modes;
+    nores_handler.free_modes = nores_free_modes;
+    nores_handler.get_current_settings = nores_get_current_settings;
+    nores_handler.set_current_settings = nores_set_current_settings;
+    nores_handler.convert_coordinates = NULL;
+    X11DRV_Settings_SetHandler(&nores_handler);
 }
 
 static BOOL get_display_device_reg_key(const WCHAR *device_name, WCHAR *key, unsigned len)
