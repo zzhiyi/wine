@@ -40,8 +40,7 @@
 WINE_DEFAULT_DEBUG_CHANNEL(x11settings);
 
 static struct x11drv_mode_info *dd_modes = NULL;
-static unsigned int dd_mode_count = 0;
-static unsigned int dd_max_modes = 0;
+
 /* All Windows drivers seen so far either support 32 bit depths, or 24 bit depths, but never both. So if we have
  * a 32 bit framebuffer, report 32 bit bpps, otherwise 24 bit ones.
  */
@@ -49,189 +48,8 @@ static const unsigned int depths_24[]  = {8, 16, 24};
 static const unsigned int depths_32[]  = {8, 16, 32};
 const DWORD *depths;
 
-/* pointers to functions that actually do the hard stuff */
-static int (*pGetCurrentMode)(void);
-static LONG (*pSetCurrentMode)(int mode);
-static const char *handler_name;
-
-static const struct fs_mode {
-    int w, h;
-} fs_modes[] = {
-    /* this table should provide a few resolution options for common display
-     * ratios, so users can choose to render at lower resolution for
-     * performance. */
-    { 800,  600}, /*  4:3 */
-    {1024,  768}, /*  4:3 */
-    {1600, 1200}, /*  4:3 */
-    {1280,  720}, /* 16:9 */
-    {1600,  900}, /* 16:9 */
-    {1920, 1080}, /* 16:9 */
-    {2560, 1440}, /* 16:9 */
-    {2880, 1620}, /* 16:9 */
-    {3200, 1800}, /* 16:9 */
-    {1440,  900}, /*  8:5 */
-    {1680, 1050}, /*  8:5 */
-    {1920, 1200}, /*  8:5 */
-    {2560, 1600}, /*  8:5 */
-    {1440,  960}, /*  3:2 */
-    {1920, 1280}, /*  3:2 */
-    {2560, 1080}, /* 21:9 ultra-wide */
-    {1920,  800}, /* 12:5 */
-    {3840, 1600}, /* 12:5 */
-    {1280, 1024}, /*  5:4 */
-};
-
-/*
- * Set the handlers for resolution changing functions
- * and initialize the master list of modes
- */
-struct x11drv_mode_info *X11DRV_Settings_SetHandlers(const char *name,
-                                                     int (*pNewGCM)(void),
-                                                     LONG (*pNewSCM)(int),
-                                                     unsigned int nmodes,
-                                                     int reserve_depths)
-{
-    handler_name = name;
-    if(pNewGCM)
-        pGetCurrentMode = pNewGCM;
-    if(pNewSCM)
-        pSetCurrentMode = pNewSCM;
-    TRACE("Resolution settings now handled by: %s\n", name);
-    nmodes += ARRAY_SIZE(fs_modes);
-    if (reserve_depths)
-        /* leave room for other depths and refresh rates */
-        dd_max_modes = 2*(3+1)*(nmodes);
-    else 
-        dd_max_modes = nmodes;
-
-    if (dd_modes) 
-    {
-        TRACE("Destroying old display modes array\n");
-        HeapFree(GetProcessHeap(), 0, dd_modes);
-    }
-    dd_modes = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*dd_modes) * dd_max_modes);
-    dd_mode_count = 0;
-    TRACE("Initialized new display modes array\n");
-    return dd_modes;
-}
-
-/* Add one mode to the master list */
-BOOL X11DRV_Settings_AddOneMode(unsigned int width, unsigned int height, unsigned int bpp, unsigned int freq)
-{
-    unsigned int i;
-    struct x11drv_mode_info *info = &dd_modes[dd_mode_count];
-    DWORD dwBpp = screen_bpp;
-    if (dd_mode_count >= dd_max_modes)
-    {
-        ERR("Maximum modes (%d) exceeded\n", dd_max_modes);
-        return FALSE;
-    }
-    if (bpp == 0) bpp = dwBpp;
-
-    if (height < 600)
-        return FALSE;
-
-    for(i = 0; i < dd_mode_count; ++i)
-    {
-        if(dd_modes[i].width == width &&
-                dd_modes[i].height == height &&
-                dd_modes[i].refresh_rate == freq &&
-                dd_modes[i].bpp == bpp)
-        {
-            return FALSE;
-        }
-    }
-
-    info->width         = width;
-    info->height        = height;
-    info->refresh_rate  = freq;
-    info->bpp           = bpp;
-    TRACE("initialized mode %d: %dx%dx%d @%d Hz (%s)\n", 
-          dd_mode_count, width, height, bpp, freq, handler_name);
-    dd_mode_count++;
-
-    return TRUE;
-}
-
-static int sort_display_modes(const void *l, const void *r)
-{
-    const struct x11drv_mode_info *left = l, *right = r;
-
-    /* largest first */
-    if(left->width < right->width)
-        return 1;
-
-    if(left->width > right->width)
-        return -1;
-
-    if(left->height < right->height)
-        return 1;
-
-    if(left->height > right->height)
-        return -1;
-
-    return 0;
-}
-
 static int currentMode = -1, realMode = -1;
 
-/* copy all the current modes using the other color depths */
-void X11DRV_Settings_AddDepthModes(void)
-{
-    int i, j;
-    int existing_modes = dd_mode_count;
-    DWORD dwBpp = screen_bpp;
-    const DWORD *depths = screen_bpp == 32 ? depths_32 : depths_24;
-    struct fs_mode real_mode;
-    unsigned int real_rate;
-
-    real_mode.w = dd_modes[realMode].width;
-    real_mode.h = dd_modes[realMode].height;
-    real_rate = dd_modes[realMode].refresh_rate;
-
-    /* Linux reports far fewer resolutions than Windows; add "missing" modes
-     * that some games may expect. */
-    for(i = 0; i < ARRAY_SIZE(fs_modes); ++i)
-    {
-        if(fs_modes[i].w <= real_mode.w &&
-                fs_modes[i].h <= real_mode.h)
-            X11DRV_Settings_AddOneMode(fs_modes[i].w, fs_modes[i].h, 0, dd_modes[realMode].refresh_rate);
-    }
-
-    qsort(dd_modes, dd_mode_count, sizeof(*dd_modes), sort_display_modes);
-
-    /* synthesize 60 FPS mode if needed */
-    if(real_rate != 60)
-    {
-        for(i = 0; i < existing_modes; ++i)
-        {
-            X11DRV_Settings_AddOneMode(dd_modes[i].width, dd_modes[i].height, dwBpp, 60);
-        }
-    }
-
-    existing_modes = dd_mode_count;
-    for (j=0; j<3; j++)
-    {
-        if (depths[j] != dwBpp)
-        {
-            for (i=0; i < existing_modes; i++)
-            {
-                X11DRV_Settings_AddOneMode(dd_modes[i].width, dd_modes[i].height,
-                                           depths[j], dd_modes[i].refresh_rate);
-            }
-        }
-    }
-
-    X11DRV_Settings_SetRealMode(real_mode.w, real_mode.h);
-}
-
-/* return the number of modes that are initialized */
-unsigned int X11DRV_Settings_GetModeCount(void)
-{
-    return dd_mode_count;
-}
-
-/* TODO: Remove the old handler interface usage once all backends are migrated to the new interface */
 static struct x11drv_settings_handler handler;
 
 /* Display modes for a device, protected by modes_section. Only cache one device at a time */
@@ -267,33 +85,6 @@ double fs_hack_user_to_real_w = 1., fs_hack_user_to_real_h = 1.;
 double fs_hack_real_to_user_w = 1., fs_hack_real_to_user_h = 1.;
 static int offs_x = 0, offs_y = 0;
 static int fs_width = 0, fs_height = 0;
-
-void X11DRV_Settings_SetRealMode(unsigned int w, unsigned int h)
-{
-    unsigned int i;
-
-    currentMode = realMode = -1;
-
-    for(i = 0; i < dd_mode_count; ++i)
-    {
-        if(dd_modes[i].width == w &&
-                dd_modes[i].height == h)
-        {
-            currentMode = i;
-            break;
-        }
-    }
-
-    if(currentMode < 0)
-    {
-        FIXME("Couldn't find current mode?! Returning 0...\n");
-        currentMode = 0;
-    }
-
-    realMode = currentMode;
-
-    TRACE("Set realMode to %d\n", realMode);
-}
 
 BOOL fs_hack_enabled(void)
 {
@@ -740,10 +531,6 @@ BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmo
     INT mode_count;
     ULONG_PTR id;
 
-    /* Use new interface if possible */
-    if (!handler.name)
-        goto old_interface;
-
     if (n == ENUM_REGISTRY_SETTINGS)
     {
         TRACE("Getting %s default settings\n", wine_dbgstr_w(name));
@@ -802,56 +589,6 @@ done:
           devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmDisplayFrequency, devmode->dmBitsPerPel,
           orientation_text[devmode->u1.s2.dmDisplayOrientation]);
     return TRUE;
-
-old_interface:
-    devmode->dmSize = FIELD_OFFSET(DEVMODEW, dmICMMethod);
-    devmode->dmSpecVersion = DM_SPECVERSION;
-    devmode->dmDriverVersion = DM_SPECVERSION;
-    memcpy(devmode->dmDeviceName, dev_name, sizeof(dev_name));
-    devmode->dmDriverExtra = 0;
-    devmode->u2.dmDisplayFlags = 0;
-    devmode->dmDisplayFrequency = 0;
-    devmode->u1.s2.dmPosition.x = 0;
-    devmode->u1.s2.dmPosition.y = 0;
-    devmode->u1.s2.dmDisplayOrientation = 0;
-    devmode->u1.s2.dmDisplayFixedOutput = 0;
-
-    if (n == ENUM_CURRENT_SETTINGS)
-    {
-        TRACE("mode %d (current) -- getting current mode (%s)\n", n, handler_name);
-        n = pGetCurrentMode();
-    }
-    if (n == ENUM_REGISTRY_SETTINGS)
-    {
-        TRACE("mode %d (registry) -- getting default mode (%s)\n", n, handler_name);
-        return read_registry_settings(name, devmode);
-    }
-    if (n < dd_mode_count)
-    {
-        devmode->dmPelsWidth = dd_modes[n].width;
-        devmode->dmPelsHeight = dd_modes[n].height;
-        devmode->dmBitsPerPel = dd_modes[n].bpp;
-        devmode->dmDisplayFrequency = dd_modes[n].refresh_rate;
-        devmode->dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL |
-                            DM_DISPLAYFLAGS;
-        if (devmode->dmDisplayFrequency)
-        {
-            devmode->dmFields |= DM_DISPLAYFREQUENCY;
-            TRACE("mode %d -- %dx%dx%dbpp @%d Hz (%s)\n", n,
-                  devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmBitsPerPel,
-                  devmode->dmDisplayFrequency, handler_name);
-        }
-        else
-        {
-            TRACE("mode %d -- %dx%dx%dbpp (%s)\n", n,
-                  devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmBitsPerPel, 
-                  handler_name);
-        }
-        return TRUE;
-    }
-    TRACE("mode %d -- not present (%s)\n", n, handler_name);
-    SetLastError(ERROR_NO_MORE_FILES);
-    return FALSE;
 }
 
 BOOL is_detached_mode(const DEVMODEW *mode)
@@ -1350,18 +1087,10 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
                                            HWND hwnd, DWORD flags, LPVOID lpvoid )
 {
     struct x11drv_adapter_setting *adapters;
-    WCHAR primary_adapter[CCHDEVICENAME];
-    char bpp_buffer[16], freq_buffer[18];
     INT changing_index = -1;
-    DEVMODEW default_mode;
     BOOL from_registry;
     INT adapter_count;
     LONG ret;
-    INT i;
-
-    /* Use new interface if possible */
-    if (!handler.name)
-        goto old_interface;
 
     from_registry = !devname && !devmode;
 
@@ -1395,80 +1124,4 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
     if (ret == DISP_CHANGE_SUCCESSFUL)
         X11DRV_DisplayDevices_Update(TRUE);
     return ret;
-
-old_interface:
-    if (!get_primary_adapter(primary_adapter))
-        return DISP_CHANGE_FAILED;
-
-    if (!devname && !devmode)
-    {
-        default_mode.dmSize = sizeof(default_mode);
-        if (!EnumDisplaySettingsExW(primary_adapter, ENUM_REGISTRY_SETTINGS, &default_mode, 0))
-        {
-            ERR("Default mode not found for %s!\n", wine_dbgstr_w(primary_adapter));
-            return DISP_CHANGE_BADMODE;
-        }
-
-        devname = primary_adapter;
-        devmode = &default_mode;
-    }
-
-    if (is_detached_mode(devmode))
-    {
-        FIXME("Detaching adapter is currently unsupported.\n");
-        return DISP_CHANGE_SUCCESSFUL;
-    }
-
-    for (i = 0; i < dd_mode_count; i++)
-    {
-        if (devmode->dmFields & DM_BITSPERPEL)
-        {
-            if (devmode->dmBitsPerPel != dd_modes[i].bpp)
-                continue;
-        }
-        if (devmode->dmFields & DM_PELSWIDTH)
-        {
-            if (devmode->dmPelsWidth != dd_modes[i].width)
-                continue;
-        }
-        if (devmode->dmFields & DM_PELSHEIGHT)
-        {
-            if (devmode->dmPelsHeight != dd_modes[i].height)
-                continue;
-        }
-        if ((devmode->dmFields & DM_DISPLAYFREQUENCY) && (dd_modes[i].refresh_rate != 0) &&
-            devmode->dmDisplayFrequency != 0)
-        {
-            if (devmode->dmDisplayFrequency != dd_modes[i].refresh_rate)
-                continue;
-        }
-        /* we have a valid mode */
-        TRACE("Requested display settings match mode %d (%s)\n", i, handler_name);
-
-        if (flags & CDS_UPDATEREGISTRY)
-            write_registry_settings(devname, devmode);
-
-        if (lstrcmpiW(primary_adapter, devname))
-        {
-            FIXME("Changing non-primary adapter %s settings is currently unsupported.\n",
-                  wine_dbgstr_w(devname));
-            return DISP_CHANGE_SUCCESSFUL;
-        }
-
-        if (!(flags & (CDS_TEST | CDS_NORESET)))
-            return pSetCurrentMode(i);
-
-        return DISP_CHANGE_SUCCESSFUL;
-    }
-
-    /* no valid modes found, only print the fields we were trying to matching against */
-    bpp_buffer[0] = freq_buffer[0] = 0;
-    if (devmode->dmFields & DM_BITSPERPEL)
-        sprintf(bpp_buffer, "bpp=%u ",  devmode->dmBitsPerPel);
-    if ((devmode->dmFields & DM_DISPLAYFREQUENCY) && (devmode->dmDisplayFrequency != 0))
-        sprintf(freq_buffer, "freq=%u ", devmode->dmDisplayFrequency);
-    ERR("No matching mode found: width=%d height=%d %s%s(%s)\n",
-        devmode->dmPelsWidth, devmode->dmPelsHeight, bpp_buffer, freq_buffer, handler.name ? handler.name: handler_name );
-
-    return DISP_CHANGE_BADMODE;
 }
