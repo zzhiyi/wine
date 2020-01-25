@@ -520,6 +520,22 @@ void init_display_registry_settings(void)
     }
 }
 
+static int mode_compare(const void *p1, const void *p2)
+{
+    const DEVMODEW *a = p1, *b = p2;
+
+    if (a->dmBitsPerPel != b->dmBitsPerPel)
+        return b->dmBitsPerPel - a->dmBitsPerPel;
+
+    if (a->dmPelsWidth != b->dmPelsWidth)
+        return a->dmPelsWidth - b->dmPelsWidth;
+
+    if (a->dmPelsHeight != b->dmPelsHeight)
+        return a->dmPelsHeight - b->dmPelsHeight;
+
+    return a->dmDisplayFrequency - b->dmDisplayFrequency;
+}
+
 /***********************************************************************
  *		EnumDisplaySettingsEx  (X11DRV.@)
  *
@@ -557,6 +573,8 @@ BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmo
             LeaveCriticalSection(&modes_section);
             return FALSE;
         }
+
+        qsort(modes, mode_count, sizeof(*modes) + modes[0].dmDriverExtra, mode_compare);
 
         if (cached_modes)
             handler.free_modes(cached_modes);
