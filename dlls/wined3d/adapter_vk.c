@@ -1057,7 +1057,7 @@ fail:
     return FALSE;
 }
 
-static VkPhysicalDevice get_vulkan_physical_device(struct wined3d_vk_info *vk_info)
+static VkPhysicalDevice get_vulkan_physical_device(struct wined3d_vk_info *vk_info, unsigned int ordinal)
 {
     VkPhysicalDevice physical_devices[1];
     uint32_t count;
@@ -1068,16 +1068,10 @@ static VkPhysicalDevice get_vulkan_physical_device(struct wined3d_vk_info *vk_in
         WARN("Failed to enumerate physical devices, vr %s.\n", wined3d_debug_vkresult(vr));
         return VK_NULL_HANDLE;
     }
-    if (!count)
+    if (!count || ordinal >= count)
     {
         WARN("No physical device.\n");
         return VK_NULL_HANDLE;
-    }
-    if (count > 1)
-    {
-        /* TODO: Create wined3d_adapter for each device. */
-        FIXME("Multiple physical devices available.\n");
-        count = 1;
     }
 
     if ((vr = VK_CALL(vkEnumeratePhysicalDevices(vk_info->instance, &count, physical_devices))) < 0)
@@ -1086,7 +1080,7 @@ static VkPhysicalDevice get_vulkan_physical_device(struct wined3d_vk_info *vk_in
         return VK_NULL_HANDLE;
     }
 
-    return physical_devices[0];
+    return physical_devices[ordinal];
 }
 
 static enum wined3d_display_driver guess_display_driver(enum wined3d_pci_vendor vendor)
@@ -1179,7 +1173,7 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
         goto fail;
     }
 
-    if (!(adapter_vk->physical_device = get_vulkan_physical_device(vk_info)))
+    if (!(adapter_vk->physical_device = get_vulkan_physical_device(vk_info, ordinal)))
         goto fail_vulkan;
 
     memset(&id_properties, 0, sizeof(id_properties));

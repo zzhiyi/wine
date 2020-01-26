@@ -25,6 +25,9 @@
 #include "wine/port.h"
 
 #include "wined3d_private.h"
+#include "initguid.h"
+#include "devguid.h"
+#include "setupapi.h"
 #include "winternl.h"
 #include "wine/heap.h"
 
@@ -2941,15 +2944,6 @@ static struct wined3d_adapter *wined3d_adapter_no3d_create(unsigned int ordinal,
 BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
         const struct wined3d_adapter_ops *adapter_ops)
 {
-    DISPLAY_DEVICEW display_device;
-
-    adapter->ordinal = ordinal;
-
-    display_device.cb = sizeof(display_device);
-    EnumDisplayDevicesW(NULL, ordinal, &display_device, 0);
-    TRACE("Display device: %s.\n", debugstr_w(display_device.DeviceName));
-    strcpyW(adapter->device_name, display_device.DeviceName);
-
     /* HACK: Use ordinal instead of allocating a new LUID for every wined3d instance */
     adapter->luid.HighPart = 0;
     adapter->luid.LowPart = ordinal;
@@ -2960,6 +2954,7 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
     memset(&adapter->driver_uuid, 0, sizeof(adapter->driver_uuid));
     memset(&adapter->device_uuid, 0, sizeof(adapter->device_uuid));
 
+    adapter->ordinal = ordinal;
     adapter->formats = NULL;
     adapter->adapter_ops = adapter_ops;
 
@@ -2984,8 +2979,81 @@ const struct wined3d_parent_ops wined3d_null_parent_ops =
     wined3d_null_wined3d_object_destroyed,
 };
 
+/* Wait until graphics driver is loaded by explorer */
+static void wait_graphics_driver_ready(void)
+{
+    static BOOL ready = FALSE;
+
+    if (!ready)
+    {
+        SendMessageW(GetDesktopWindow(), WM_NULL, 0, 0);
+        ready = TRUE;
+    }
+}
+
+static HANDLE get_display_device_init_mutex(void)
+{
+    static const WCHAR init_mutexW[] = {'d','i','s','p','l','a','y','_','d','e','v','i','c','e','_','i','n','i','t',0};
+    HANDLE mutex = CreateMutexW(NULL, FALSE, init_mutexW);
+
+    WaitForSingleObject(mutex, INFINITE);
+    return mutex;
+}
+
+static void release_display_device_init_mutex(HANDLE mutex)
+{
+    ReleaseMutex(mutex);
+    CloseHandle(mutex);
+}
+
+/* A simplified version of EnumDisplayDevices for wined3d_init. EnumDisplayDevices can't be used in wined3d_init
+ * because it also uses the display device init mutex. */
+static BOOL enum_display_device(DWORD index, DWORD *state, WCHAR *id, DWORD id_size)
+{
+    static const WCHAR video_key[] = {'H','A','R','D','W','A','R','E','\\','D','E','V','I','C','E','M','A','P','\\',
+            'V','I','D','E','O','\\',0};
+    static const WCHAR video_fmt[] = {'\\','D','e','v','i','c','e','\\','V','i','d','e','o','%','d',0};
+    static const WCHAR state_flags[] = {'S','t','a','t','e','F','l','a','g','s',0};
+    static const WCHAR gpu_id[] = {'G','P','U','I','D',0};
+    WCHAR value[MAX_PATH], buffer[MAX_PATH];
+    WCHAR *key;
+    DWORD size;
+
+    sprintfW(value, video_fmt, index);
+    size = sizeof(buffer);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, video_key, value, RRF_RT_REG_SZ, NULL, buffer, &size))
+        return FALSE;
+
+    /* Strip \Registry\Machine\ */
+    key = buffer + 18;
+    if (state)
+    {
+        size = sizeof(state);
+        if (RegGetValueW(HKEY_CURRENT_CONFIG, key, state_flags, RRF_RT_REG_DWORD, NULL, state, &size))
+            return FALSE;
+    }
+
+    if (id)
+    {
+        size = id_size;
+        if (RegGetValueW(HKEY_CURRENT_CONFIG, key, gpu_id, RRF_RT_REG_SZ | RRF_ZEROONFAILURE, NULL, id, &size))
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
 {
+    static const WCHAR display_fmt[] = {'\\','\\','.','\\','D','I','S','P','L','A','Y','%','u',0};
+    static const WCHAR pci[] = {'P', 'C', 'I', 0};
+    UINT adapter_count = 0, output_count = 0, output_index = 0;
+    SP_DEVINFO_DATA device_data = {sizeof(device_data)};
+    BOOL adapter_fallback, output_fallback;
+    WCHAR id[MAX_PATH], buffer[MAX_PATH];
+    DWORD state, size, i, j;
+    HDEVINFO devinfo;
+    HANDLE mutex;
     HRESULT hr = E_FAIL;
 
     wined3d->ref = 1;
@@ -2993,8 +3061,22 @@ HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
 
     TRACE("Initialising adapters and outputs.\n");
 
-    wined3d->adapter_count = 1;
-    wined3d->output_count = 1;
+    wait_graphics_driver_ready();
+    mutex = get_display_device_init_mutex();
+
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_DISPLAY, pci, NULL, 0);
+    for (i = 0; SetupDiEnumDeviceInfo(devinfo, i, &device_data); ++i)
+        ++adapter_count;
+
+    for (i = 0; enum_display_device(i, &state, NULL, 0); ++i)
+        if (state & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)
+            ++output_count;
+
+    /* Make sure even when querying adapters or outputs fails, wined3d still has at least one adapter and output */
+    wined3d->adapter_count = max(adapter_count, 1);
+    wined3d->output_count = max(output_count, 1);
+    adapter_fallback = !adapter_count;
+    output_fallback = !output_count;
 
     wined3d->adapters = heap_calloc(wined3d->adapter_count, sizeof(*wined3d->adapters));
     if (!wined3d->adapters)
@@ -3004,24 +3086,46 @@ HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
     if (!wined3d->outputs)
         goto fail;
 
-    if (!(wined3d->adapters[0] = wined3d_adapter_create(0, flags)))
+    for (i = 0; SetupDiEnumDeviceInfo(devinfo, i, &device_data) || adapter_fallback; ++i)
     {
-        WARN("Failed to create adapter.\n");
-        goto fail;
-    }
+        if (!(wined3d->adapters[i] = wined3d_adapter_create(i, flags)))
+            goto fail;
 
-    wined3d->adapters[0]->outputs = wined3d->outputs;
-    wined3d->adapters[0]->output_count = 1;
-    if (FAILED(hr = wined3d_output_init(&wined3d->outputs[0], wined3d->adapters[0],
-            wined3d->adapters[0]->device_name, 0)))
-    {
-        WARN("Failed to create output, hr %#x.\n", hr);
-        goto fail;
+        TRACE("Created adapter %u %p.\n", i, wined3d->adapters[i]);
+        wined3d->adapters[i]->outputs = &wined3d->outputs[output_index];
+
+        if (!adapter_fallback)
+            SetupDiGetDeviceInstanceIdW(devinfo, &device_data, id, MAX_PATH, &size);
+
+        for (j = 0; enum_display_device(j, &state, buffer, sizeof(buffer)) || output_fallback; ++j)
+        {
+            if (!output_fallback && (!(state & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) || lstrcmpiW(id, buffer)))
+                continue;
+
+            sprintfW(buffer, display_fmt, output_index + 1);
+            if (FAILED(wined3d_output_init(&wined3d->outputs[output_index], wined3d->adapters[i], buffer,
+                                           output_index)))
+                goto fail;
+
+            TRACE("Created output %u %p name %s for adapter %u.\n", wined3d->adapters[i]->output_count,
+                  &wined3d->outputs[output_index], wine_dbgstr_w(wined3d->outputs[output_index].device_name), i);
+
+            ++output_index;
+            wined3d->adapters[i]->output_count += 1;
+
+            if (output_fallback)
+                break;
+        }
+
+        if (adapter_fallback)
+            break;
     }
 
     TRACE("adapter count: %u, output count: %u.\n", wined3d->adapter_count, wined3d->output_count);
     hr = WINED3D_OK;
 fail:
+    SetupDiDestroyDeviceInfoList(devinfo);
+    release_display_device_init_mutex(mutex);
     if (FAILED(hr))
     {
         ERR("Initialising wined3d failed!\n");
