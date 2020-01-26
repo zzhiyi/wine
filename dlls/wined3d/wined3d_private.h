@@ -2853,6 +2853,7 @@ struct wined3d_adapter_ops
             struct wined3d_unordered_access_view *view, const struct wined3d_uvec4 *clear_value);
 };
 
+/* The output structure, represents a video card output */
 struct wined3d_output
 {
     D3DKMT_HANDLE kmt_adapter;
@@ -2860,7 +2861,7 @@ struct wined3d_output
     D3DDDI_VIDEO_PRESENT_SOURCE_ID vidpn_source_id;
 };
 
-/* The adapter structure */
+/* The adapter structure, represents a video card */
 struct wined3d_adapter
 {
     unsigned int ordinal;
@@ -2870,7 +2871,10 @@ struct wined3d_adapter
     struct wined3d_gl_info  gl_info;
     struct wined3d_d3d_info d3d_info;
     struct wined3d_driver_info driver_info;
-    struct wined3d_output output;
+
+    struct wined3d_output *outputs; /* Outputs under this adapter */
+    unsigned int output_count;
+
     UINT64 vram_bytes_used;
     GUID driver_uuid;
     GUID device_uuid;
@@ -3075,7 +3079,9 @@ struct wined3d
     LONG ref;
     unsigned int flags;
     unsigned int adapter_count;
-    struct wined3d_adapter *adapters[1];
+    struct wined3d_adapter **adapters;
+    unsigned int output_count; /* Outputs of all adapters, d3d8/9 treat outputs as adapters */
+    struct wined3d_output *outputs;
 };
 
 BOOL wined3d_filter_messages(HWND window, BOOL filter) DECLSPEC_HIDDEN;

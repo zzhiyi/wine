@@ -26,6 +26,7 @@
 
 #include "wined3d_private.h"
 #include "winternl.h"
+#include "wine/heap.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(d3d);
 WINE_DECLARE_DEBUG_CHANNEL(winediag);
@@ -155,7 +156,6 @@ UINT64 adapter_adjust_memory(struct wined3d_adapter *adapter, INT64 amount)
 
 void wined3d_adapter_cleanup(struct wined3d_adapter *adapter)
 {
-    wined3d_output_cleanup(&adapter->output);
     heap_free(adapter->formats);
 }
 
@@ -168,6 +168,32 @@ ULONG CDECL wined3d_incref(struct wined3d *wined3d)
     return refcount;
 }
 
+static void wined3d_cleanup(struct wined3d *wined3d)
+{
+    unsigned int i;
+
+    if (wined3d->outputs)
+    {
+        for (i = 0; i < wined3d->output_count; ++i)
+            wined3d_output_cleanup(&wined3d->outputs[i]);
+    }
+
+    if (wined3d->adapters)
+    {
+        for (i = 0; i < wined3d->adapter_count; ++i)
+        {
+            struct wined3d_adapter *adapter = wined3d->adapters[i];
+            if (!adapter)
+                continue;
+
+            adapter->adapter_ops->adapter_destroy(adapter);
+        }
+    }
+
+    heap_free(wined3d->outputs);
+    heap_free(wined3d->adapters);
+}
+
 ULONG CDECL wined3d_decref(struct wined3d *wined3d)
 {
     ULONG refcount = InterlockedDecrement(&wined3d->ref);
@@ -176,14 +202,7 @@ ULONG CDECL wined3d_decref(struct wined3d *wined3d)
 
     if (!refcount)
     {
-        unsigned int i;
-
-        for (i = 0; i < wined3d->adapter_count; ++i)
-        {
-            struct wined3d_adapter *adapter = wined3d->adapters[i];
-
-            adapter->adapter_ops->adapter_destroy(adapter);
-        }
+        wined3d_cleanup(wined3d);
         heap_free(wined3d);
     }
 
@@ -919,7 +938,7 @@ struct wined3d_output * CDECL wined3d_get_adapter_output(const struct wined3d *w
     if (adapter_idx >= wined3d->adapter_count)
         return NULL;
 
-    return &wined3d->adapters[adapter_idx]->output;
+    return &wined3d->adapters[adapter_idx]->outputs[0];
 }
 
 /* FIXME: GetAdapterModeCount and EnumAdapterModes currently only returns modes
@@ -2866,7 +2885,6 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
         const struct wined3d_adapter_ops *adapter_ops)
 {
     DISPLAY_DEVICEW display_device;
-    HRESULT hr;
 
     adapter->ordinal = ordinal;
 
@@ -2874,11 +2892,6 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
     EnumDisplayDevicesW(NULL, ordinal, &display_device, 0);
     TRACE("Display device: %s.\n", debugstr_w(display_device.DeviceName));
     strcpyW(adapter->device_name, display_device.DeviceName);
-    if (FAILED(hr = wined3d_output_init(&adapter->output, adapter->device_name)))
-    {
-        ERR("Failed to initialise output, hr %#x.\n", hr);
-        return FALSE;
-    }
 
     /* HACK: Use ordinal instead of allocating a new LUID for every wined3d instance */
     adapter->luid.HighPart = 0;
@@ -2916,17 +2929,45 @@ const struct wined3d_parent_ops wined3d_null_parent_ops =
 
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
 {
+    HRESULT hr = E_FAIL;
+
     wined3d->ref = 1;
     wined3d->flags = flags;
 
-    TRACE("Initialising adapters.\n");
+    TRACE("Initialising adapters and outputs.\n");
+
+    wined3d->adapter_count = 1;
+    wined3d->output_count = 1;
+
+    wined3d->adapters = heap_calloc(wined3d->adapter_count, sizeof(*wined3d->adapters));
+    if (!wined3d->adapters)
+        goto fail;
+
+    wined3d->outputs = heap_calloc(wined3d->output_count, sizeof(*wined3d->outputs));
+    if (!wined3d->outputs)
+        goto fail;
 
     if (!(wined3d->adapters[0] = wined3d_adapter_create(0, flags)))
     {
         WARN("Failed to create adapter.\n");
-        return E_FAIL;
+        goto fail;
     }
-    wined3d->adapter_count = 1;
 
-    return WINED3D_OK;
+    wined3d->adapters[0]->outputs = wined3d->outputs;
+    wined3d->adapters[0]->output_count = 1;
+    if (FAILED(hr = wined3d_output_init(&wined3d->outputs[0], wined3d->adapters[0]->device_name)))
+    {
+        WARN("Failed to create output, hr %#x.\n", hr);
+        goto fail;
+    }
+
+    TRACE("adapter count: %u, output count: %u.\n", wined3d->adapter_count, wined3d->output_count);
+    hr = WINED3D_OK;
+fail:
+    if (FAILED(hr))
+    {
+        ERR("Initialising wined3d failed!\n");
+        wined3d_cleanup(wined3d);
+    }
+    return hr;
 }
