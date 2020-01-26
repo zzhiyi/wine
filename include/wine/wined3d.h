@@ -2238,8 +2238,6 @@ void __stdcall wined3d_mutex_unlock(void);
 struct wined3d * __cdecl wined3d_create(DWORD flags);
 ULONG __cdecl wined3d_decref(struct wined3d *wined3d);
 UINT __cdecl wined3d_get_adapter_count(const struct wined3d *wined3d);
-HRESULT __cdecl wined3d_get_adapter_identifier(const struct wined3d *wined3d, UINT adapter_idx,
-        DWORD flags, struct wined3d_adapter_identifier *identifier);
 struct wined3d_output * __cdecl wined3d_get_adapter_output(const struct wined3d *wined3d, unsigned int adapter_idx);
 UINT __cdecl wined3d_get_output_count(const struct wined3d *wined3d);
 HRESULT __cdecl wined3d_get_output_desc(const struct wined3d *wined3d, unsigned int adapter_idx,
@@ -2263,6 +2261,8 @@ HRESULT __cdecl wined3d_adapter_check_device_multisample_type(const struct wined
         enum wined3d_multisample_type multisample_type, DWORD *quality_levels);
 HRESULT __cdecl wined3d_adapter_get_device_caps(const struct wined3d *wined3d, unsigned int adapter_idx,
         enum wined3d_device_type device_type, struct wined3d_caps *caps);
+HRESULT __cdecl wined3d_adapter_get_identifier(const struct wined3d *wined3d, UINT adapter_idx,
+        DWORD flags, struct wined3d_adapter_identifier *identifier);
 HRESULT __cdecl wined3d_adapter_get_output_count(const struct wined3d *wined3d, UINT adapter_idx, UINT *count);
 HRESULT __cdecl wined3d_adapter_get_output_ordinal(const struct wined3d *wined3d, UINT adapter_idx, UINT output_idx,
         UINT *ordinal);

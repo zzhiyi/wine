@@ -1427,7 +1427,7 @@ static BOOL WINAPI load_dxvk_config(INIT_ONCE *once, void *param, void **context
     return TRUE;
 }
 
-HRESULT CDECL wined3d_get_adapter_identifier(const struct wined3d *wined3d,
+HRESULT CDECL wined3d_adapter_get_identifier(const struct wined3d *wined3d,
         UINT adapter_idx, DWORD flags, struct wined3d_adapter_identifier *identifier)
 {
     const struct wined3d_adapter *adapter;

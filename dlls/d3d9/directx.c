@@ -140,7 +140,7 @@ static HRESULT WINAPI d3d9_GetAdapterIdentifier(IDirect3D9Ex *iface, UINT adapte
     if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
         return hr;
 
-    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(d3d9->wined3d, wined3d_adapter, flags, &adapter_id)))
+    if (SUCCEEDED(hr = wined3d_adapter_get_identifier(d3d9->wined3d, wined3d_adapter, flags, &adapter_id)))
     {
         identifier->DriverVersion = adapter_id.driver_version;
         identifier->VendorId = adapter_id.vendor_id;
@@ -577,7 +577,7 @@ static HRESULT WINAPI d3d9_GetAdapterLUID(IDirect3D9Ex *iface, UINT adapter, LUI
     if (FAILED(hr = wined3d_output_get_adapter_ordinal(d3d9->wined3d, adapter, &wined3d_adapter)))
         return hr;
 
-    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(d3d9->wined3d, wined3d_adapter, 0, &adapter_id)))
+    if (SUCCEEDED(hr = wined3d_adapter_get_identifier(d3d9->wined3d, wined3d_adapter, 0, &adapter_id)))
         *luid = adapter_id.adapter_luid;
 
     return hr;
