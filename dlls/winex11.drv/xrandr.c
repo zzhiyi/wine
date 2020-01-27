@@ -1154,29 +1154,6 @@ static BOOL xrandr14_get_monitors( ULONG_PTR adapter_id, struct x11drv_monitor *
             OffsetRect( &monitors[i].rc_monitor, -primary_rect.left, -primary_rect.top );
             OffsetRect( &monitors[i].rc_work, -primary_rect.left, -primary_rect.top );
         }
-
-        if (primary_index >= 0 && fs_hack_enabled())
-        {
-            /* apply fs hack to primary monitor */
-            POINT fs_hack = fs_hack_current_mode();
-
-            monitors[0].rc_monitor.right = monitors[0].rc_monitor.left + fs_hack.x;
-            monitors[0].rc_monitor.bottom = monitors[0].rc_monitor.top + fs_hack.y;
-
-            fs_hack.x = monitors[0].rc_work.left;
-            fs_hack.y = monitors[0].rc_work.top;
-            fs_hack_real_to_user(&fs_hack);
-            monitors[0].rc_work.left = fs_hack.x;
-            monitors[0].rc_work.top = fs_hack.y;
-
-            fs_hack.x = monitors[0].rc_work.right;
-            fs_hack.y = monitors[0].rc_work.bottom;
-            fs_hack_real_to_user(&fs_hack);
-            monitors[0].rc_work.right = fs_hack.x;
-            monitors[0].rc_work.bottom = fs_hack.y;
-
-            /* TODO adjust other monitor positions */
-        }
     }
 
     *new_monitors = monitors;

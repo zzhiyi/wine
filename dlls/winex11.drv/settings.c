@@ -34,16 +34,12 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(x11settings);
 
-static struct x11drv_mode_info *dd_modes = NULL;
-
 /* All Windows drivers seen so far either support 32 bit depths, or 24 bit depths, but never both. So if we have
  * a 32 bit framebuffer, report 32 bit bpps, otherwise 24 bit ones.
  */
 static const unsigned int depths_24[]  = {8, 16, 24};
 static const unsigned int depths_32[]  = {8, 16, 32};
 const DWORD *depths;
-
-static int currentMode = -1, realMode = -1;
 
 static struct x11drv_settings_handler handler;
 
@@ -72,167 +68,15 @@ void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *new_handle
     }
 }
 
+struct x11drv_settings_handler X11DRV_Settings_GetHandler(void)
+{
+    return handler;
+}
+
 /***********************************************************************
  * Default handlers if resolution switching is not enabled
  *
  */
-double fs_hack_user_to_real_w = 1., fs_hack_user_to_real_h = 1.;
-double fs_hack_real_to_user_w = 1., fs_hack_real_to_user_h = 1.;
-static int offs_x = 0, offs_y = 0;
-static int fs_width = 0, fs_height = 0;
-
-BOOL fs_hack_enabled(void)
-{
-    return currentMode >= 0 &&
-        currentMode != realMode;
-}
-
-BOOL fs_hack_mapping_required(void)
-{
-    /* steamcompmgr does our mapping for us */
-    return !wm_is_steamcompmgr(NULL) &&
-        currentMode >= 0 &&
-        currentMode != realMode;
-}
-
-BOOL fs_hack_is_integer(void)
-{
-    static int is_int = -1;
-    if(is_int < 0)
-    {
-        const char *e = getenv("WINE_FULLSCREEN_INTEGER_SCALING");
-        is_int = e && strcmp(e, "0");
-    }
-    return is_int;
-}
-
-BOOL fs_hack_matches_current_mode(int w, int h)
-{
-    return fs_hack_enabled() &&
-        (w == dd_modes[currentMode].width &&
-         h == dd_modes[currentMode].height);
-}
-
-BOOL fs_hack_matches_real_mode(int w, int h)
-{
-    return fs_hack_enabled() &&
-        (w == dd_modes[realMode].width &&
-         h == dd_modes[realMode].height);
-}
-
-BOOL fs_hack_matches_last_mode(int w, int h)
-{
-    return w == fs_width && h == fs_height;
-}
-
-void fs_hack_scale_user_to_real(POINT *pos)
-{
-    if(fs_hack_mapping_required()){
-        TRACE("from %d,%d\n", pos->x, pos->y);
-        pos->x = lround(pos->x * fs_hack_user_to_real_w);
-        pos->y = lround(pos->y * fs_hack_user_to_real_h);
-        TRACE("to %d,%d\n", pos->x, pos->y);
-    }
-}
-
-void fs_hack_scale_real_to_user(POINT *pos)
-{
-    if(fs_hack_mapping_required()){
-        TRACE("from %d,%d\n", pos->x, pos->y);
-        pos->x = lround(pos->x * fs_hack_real_to_user_w);
-        pos->y = lround(pos->y * fs_hack_real_to_user_h);
-        TRACE("to %d,%d\n", pos->x, pos->y);
-    }
-}
-
-POINT fs_hack_get_scaled_screen_size(void)
-{
-    POINT p = { dd_modes[currentMode].width,
-        dd_modes[currentMode].height };
-    fs_hack_scale_user_to_real(&p);
-    return p;
-}
-
-void fs_hack_user_to_real(POINT *pos)
-{
-    if(fs_hack_mapping_required()){
-        TRACE("from %d,%d\n", pos->x, pos->y);
-        fs_hack_scale_user_to_real(pos);
-        pos->x += offs_x;
-        pos->y += offs_y;
-        TRACE("to %d,%d\n", pos->x, pos->y);
-    }
-}
-
-void fs_hack_real_to_user(POINT *pos)
-{
-    if(fs_hack_mapping_required()){
-        TRACE("from %d,%d\n", pos->x, pos->y);
-
-        if(pos->x <= offs_x)
-            pos->x = 0;
-        else
-            pos->x -= offs_x;
-
-        if(pos->y <= offs_y)
-            pos->y = 0;
-        else
-            pos->y -= offs_y;
-
-        if(pos->x >= fs_width)
-            pos->x = fs_width - 1;
-        if(pos->y >= fs_height)
-            pos->y = fs_height - 1;
-
-        fs_hack_scale_real_to_user(pos);
-
-        TRACE("to %d,%d\n", pos->x, pos->y);
-    }
-}
-
-void fs_hack_rect_user_to_real(RECT *rect)
-{
-    fs_hack_user_to_real((POINT *)&rect->left);
-    fs_hack_user_to_real((POINT *)&rect->right);
-}
-
-/* this is for clipping */
-void fs_hack_rgndata_user_to_real(RGNDATA *data)
-{
-    unsigned int i;
-    XRectangle *xrect;
-
-    if (data && fs_hack_mapping_required())
-    {
-        xrect = (XRectangle *)data->Buffer;
-        for (i = 0; i < data->rdh.nCount; i++)
-        {
-            POINT p;
-            p.x = xrect[i].x;
-            p.y = xrect[i].y;
-            fs_hack_user_to_real(&p);
-            xrect[i].x = p.x;
-            xrect[i].y = p.y;
-            xrect[i].width  *= fs_hack_user_to_real_w;
-            xrect[i].height *= fs_hack_user_to_real_h;
-        }
-    }
-}
-
-POINT fs_hack_current_mode(void)
-{
-    POINT ret = { dd_modes[currentMode].width,
-        dd_modes[currentMode].height };
-    return ret;
-}
-
-POINT fs_hack_real_mode(void)
-{
-    POINT ret = { dd_modes[realMode].width,
-        dd_modes[realMode].height };
-    return ret;
-}
-
 static BOOL nores_get_id(const WCHAR *device_name, ULONG_PTR *id)
 {
     static const WCHAR displayW[] = {'\\', '\\', '.', '\\', 'D', 'I', 'S', 'P', 'L', 'A', 'Y'};
