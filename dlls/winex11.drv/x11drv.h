@@ -623,26 +623,21 @@ extern BOOL wm_is_mutter(Display *) DECLSPEC_HIDDEN;
 extern BOOL wm_is_steamcompmgr(Display *) DECLSPEC_HIDDEN;
 
 extern void set_wm_hints( struct x11drv_win_data *data ) DECLSPEC_HIDDEN;
-extern BOOL fs_hack_enabled(void) DECLSPEC_HIDDEN;
-extern BOOL fs_hack_mapping_required(void) DECLSPEC_HIDDEN;
+extern BOOL fs_hack_enabled(HMONITOR monitor) DECLSPEC_HIDDEN;
+extern BOOL fs_hack_mapping_required(HMONITOR monitor) DECLSPEC_HIDDEN;
 extern BOOL fs_hack_is_integer(void) DECLSPEC_HIDDEN;
-extern BOOL fs_hack_matches_current_mode(int w, int h) DECLSPEC_HIDDEN;
-extern BOOL fs_hack_matches_real_mode(int w, int h) DECLSPEC_HIDDEN;
-extern POINT fs_hack_current_mode(void) DECLSPEC_HIDDEN;
-extern POINT fs_hack_real_mode(void) DECLSPEC_HIDDEN;
-extern void fs_hack_user_to_real(POINT *pos) DECLSPEC_HIDDEN;
-extern void fs_hack_real_to_user(POINT *pos) DECLSPEC_HIDDEN;
-extern void fs_hack_scale_user_to_real(POINT *pos) DECLSPEC_HIDDEN;
-extern void fs_hack_scale_real_to_user(POINT *pos) DECLSPEC_HIDDEN;
-extern void fs_hack_rect_user_to_real(RECT *data) DECLSPEC_HIDDEN;
+extern HMONITOR fs_hack_monitor_from_hwnd(HWND hwnd) DECLSPEC_HIDDEN;
+extern BOOL fs_hack_matches_current_mode(HMONITOR monitor, INT width, INT height) DECLSPEC_HIDDEN;
+extern RECT fs_hack_current_mode(HMONITOR monitor) DECLSPEC_HIDDEN;
+extern RECT fs_hack_real_mode(HMONITOR monitor) DECLSPEC_HIDDEN;
+extern void fs_hack_point_user_to_real(POINT *pos) DECLSPEC_HIDDEN;
+extern void fs_hack_point_real_to_user(POINT *pos) DECLSPEC_HIDDEN;
+extern void fs_hack_rect_user_to_real(RECT *rect) DECLSPEC_HIDDEN;
 extern void fs_hack_rgndata_user_to_real(RGNDATA *data) DECLSPEC_HIDDEN;
-extern POINT fs_hack_get_scaled_screen_size(void) DECLSPEC_HIDDEN;
-extern BOOL fs_hack_window_is_hacked(HWND hwnd, struct x11drv_win_data *data) DECLSPEC_HIDDEN;
-extern void fs_hack_xrender_copy(Drawable src, Drawable dst) DECLSPEC_HIDDEN;
-extern double fs_hack_user_to_real_w, fs_hack_user_to_real_h DECLSPEC_HIDDEN;
-extern double fs_hack_real_to_user_w, fs_hack_real_to_user_h DECLSPEC_HIDDEN;
-BOOL fs_hack_matches_last_mode(int w, int h) DECLSPEC_HIDDEN;
-void fs_hack_choose_mode(int w, int h) DECLSPEC_HIDDEN;
+extern double fs_hack_get_user_to_real_scale(HMONITOR) DECLSPEC_HIDDEN;
+extern SIZE fs_hack_get_scaled_screen_size(HMONITOR monitor) DECLSPEC_HIDDEN;
+extern RECT fs_hack_get_real_virtual_screen(void) DECLSPEC_HIDDEN;
+extern void fs_hack_init(void) DECLSPEC_HIDDEN;
 
 static inline void mirror_rect( const RECT *window_rect, RECT *rect )
 {
@@ -760,6 +755,7 @@ struct x11drv_settings_handler
 };
 
 extern void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *handler) DECLSPEC_HIDDEN;
+extern struct x11drv_settings_handler X11DRV_Settings_GetHandler(void) DECLSPEC_HIDDEN;
 
 extern void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height ) DECLSPEC_HIDDEN;
 extern void X11DRV_resize_desktop(INT, INT, BOOL) DECLSPEC_HIDDEN;
@@ -770,7 +766,6 @@ extern BOOL create_desktop_win_data( Window win ) DECLSPEC_HIDDEN;
 extern BOOL get_primary_adapter(WCHAR *) DECLSPEC_HIDDEN;
 extern void init_display_registry_settings(void) DECLSPEC_HIDDEN;
 void X11DRV_Settings_Init(void) DECLSPEC_HIDDEN;
-void X11DRV_Settings_SetRealMode(unsigned int w, unsigned int h) DECLSPEC_HIDDEN;
 
 void X11DRV_XF86VM_Init(void) DECLSPEC_HIDDEN;
 void X11DRV_XRandR_Init(void) DECLSPEC_HIDDEN;
@@ -856,6 +851,7 @@ struct x11drv_display_device_handler
 extern HANDLE get_display_device_init_mutex(void) DECLSPEC_HIDDEN;
 extern void release_display_device_init_mutex(HANDLE) DECLSPEC_HIDDEN;
 extern void X11DRV_DisplayDevices_SetHandler(const struct x11drv_display_device_handler *handler) DECLSPEC_HIDDEN;
+extern struct x11drv_display_device_handler X11DRV_DisplayDevices_GetHandler(void) DECLSPEC_HIDDEN;
 extern void X11DRV_DisplayDevices_Init(BOOL force) DECLSPEC_HIDDEN;
 extern void X11DRV_DisplayDevices_RegisterEventHandlers(void) DECLSPEC_HIDDEN;
 extern void X11DRV_DisplayDevices_Update(BOOL) DECLSPEC_HIDDEN;

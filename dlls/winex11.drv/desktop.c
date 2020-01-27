@@ -360,22 +360,33 @@ static BOOL CALLBACK update_windows_on_desktop_resize( HWND hwnd, LPARAM lparam 
 {
     struct x11drv_win_data *data;
     UINT mask = (UINT)lparam;
+    HMONITOR monitor;
 
     if (!(data = get_win_data( hwnd ))) return TRUE;
 
-    if (fs_hack_mapping_required() &&
-            fs_hack_matches_current_mode(
+    monitor = fs_hack_monitor_from_hwnd( hwnd );
+    if (fs_hack_mapping_required( monitor ) &&
+            fs_hack_matches_current_mode( monitor,
                 data->whole_rect.right - data->whole_rect.left,
                 data->whole_rect.bottom - data->whole_rect.top)){
         if(!data->fs_hack){
-            POINT p = fs_hack_real_mode();
-            POINT tl = virtual_screen_to_root(0, 0);
-            TRACE("Enabling fs hack, resizing window %p to (%u,%u)-(%u,%u)\n", hwnd, tl.x, tl.y, p.x, p.y);
+            RECT real_rect = fs_hack_real_mode( monitor );
+            MONITORINFO monitor_info;
+            UINT width, height;
+            POINT tl;
+
+            monitor_info.cbSize = sizeof(monitor_info);
+            GetMonitorInfoW( monitor, &monitor_info );
+            tl = virtual_screen_to_root( monitor_info.rcMonitor.left, monitor_info.rcMonitor.top );
+            width = real_rect.right - real_rect.left;
+            height = real_rect.bottom - real_rect.top;
+
+            TRACE("Enabling fs hack, resizing window %p to (%u,%u)-(%u,%u)\n", hwnd, tl.x, tl.y, width, height);
             data->fs_hack = TRUE;
             set_wm_hints( data );
-            XMoveResizeWindow(data->display, data->whole_window, tl.x, tl.y, p.x, p.y);
+            XMoveResizeWindow(data->display, data->whole_window, tl.x, tl.y, width, height);
             if(data->client_window)
-                XMoveResizeWindow(data->display, data->client_window, 0, 0, p.x, p.y);
+                XMoveResizeWindow(data->display, data->client_window, 0, 0, width, height);
             sync_gl_drawable(hwnd, FALSE);
             update_net_wm_states( data );
         }
@@ -383,6 +394,9 @@ static BOOL CALLBACK update_windows_on_desktop_resize( HWND hwnd, LPARAM lparam 
 
         /* update the full screen state */
         update_net_wm_states( data );
+
+        if (data->fs_hack)
+            mask |= CWX | CWY;
 
         if (mask && data->whole_window)
         {
@@ -393,10 +407,10 @@ static BOOL CALLBACK update_windows_on_desktop_resize( HWND hwnd, LPARAM lparam 
             XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
         }
 
-        if(data->fs_hack &&
-            !fs_hack_matches_current_mode(
+        if(data->fs_hack && (!fs_hack_mapping_required(monitor) ||
+            !fs_hack_matches_current_mode(monitor,
                 data->whole_rect.right - data->whole_rect.left,
-                data->whole_rect.bottom - data->whole_rect.top)){
+                data->whole_rect.bottom - data->whole_rect.top))){
             TRACE("Disabling fs hack\n");
             data->fs_hack = FALSE;
             if(data->client_window){

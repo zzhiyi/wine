@@ -194,21 +194,33 @@ fail:
 
 POINT virtual_screen_to_root(INT x, INT y)
 {
-    RECT virtual = get_virtual_screen_rect();
+    RECT virtual = fs_hack_get_real_virtual_screen();
     POINT pt;
 
-    pt.x = x - virtual.left;
-    pt.y = y - virtual.top;
+    TRACE("from %d,%d\n", x, y);
+
+    pt.x = x;
+    pt.y = y;
+    fs_hack_point_user_to_real(&pt);
+    TRACE("to real %d,%d\n", pt.x, pt.y);
+
+    pt.x -= virtual.left;
+    pt.y -= virtual.top;
+    TRACE("to root %d,%d\n", pt.x, pt.y);
     return pt;
 }
 
 POINT root_to_virtual_screen(INT x, INT y)
 {
-    RECT virtual = get_virtual_screen_rect();
+    RECT virtual = fs_hack_get_real_virtual_screen();
     POINT pt;
 
+    TRACE("from root %d,%d\n", x, y);
     pt.x = x + virtual.left;
     pt.y = y + virtual.top;
+    TRACE("to real %d,%d\n", pt.x, pt.y);
+    fs_hack_point_real_to_user(&pt);
+    TRACE("to user %d,%d\n", pt.x, pt.y);
     return pt;
 }
 
@@ -262,6 +274,11 @@ void X11DRV_DisplayDevices_SetHandler(const struct x11drv_display_device_handler
         host_handler = *new_handler;
         TRACE("Display device functions are now handled by: %s\n", host_handler.name);
     }
+}
+
+struct x11drv_display_device_handler X11DRV_DisplayDevices_GetHandler(void)
+{
+    return host_handler;
 }
 
 void X11DRV_DisplayDevices_RegisterEventHandlers(void)

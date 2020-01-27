@@ -1267,7 +1267,7 @@ VkResult WINAPI wine_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice 
         capabilities->maxImageCount = 32;
 
     if(vk_funcs->query_fs_hack &&
-            vk_funcs->query_fs_hack(NULL, &user_res, NULL, NULL)){
+            vk_funcs->query_fs_hack(surface, NULL, &user_res, NULL, NULL)){
         capabilities->currentExtent = user_res;
         capabilities->minImageExtent = user_res;
         capabilities->maxImageExtent = user_res;
@@ -1715,7 +1715,7 @@ VkResult WINAPI wine_vkCreateSwapchainKHR(VkDevice device, const VkSwapchainCrea
         our_createinfo.oldSwapchain = ((struct VkSwapchainKHR_T *)(UINT_PTR)our_createinfo.oldSwapchain)->swapchain;
 
     if(vk_funcs->query_fs_hack &&
-            vk_funcs->query_fs_hack(&object->real_extent, &user_sz, &object->blit_dst, &object->fs_hack_filter) &&
+            vk_funcs->query_fs_hack(pCreateInfo->surface, &object->real_extent, &user_sz, &object->blit_dst, &object->fs_hack_filter) &&
             our_createinfo.imageExtent.width == user_sz.width &&
             our_createinfo.imageExtent.height == user_sz.height)
     {
