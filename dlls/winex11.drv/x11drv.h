@@ -695,6 +695,59 @@ struct x11drv_mode_info
     unsigned int refresh_rate;
 };
 
+#define DEPTH_COUNT 3
+extern const DWORD *depths DECLSPEC_HIDDEN;
+
+/* X11 settings handler. Used to report and change the resolution of display devices */
+struct x11drv_settings_handler
+{
+    /* A name to tell what host driver is used */
+    const char *name;
+
+    /* Higher priority can override handlers with a lower priority */
+    INT priority;
+
+    /* get_id will be called to map a device name, e.g., \\.\DISPLAY1 to a driver specific id.
+     * Following functions use this id to identify the device.
+     *
+     * Return FALSE if the device can not be found and TRUE on success */
+    BOOL (*get_id)(const WCHAR *device_name, ULONG_PTR *id);
+
+    /* get_modes will be called to get a list of supported modes of the device of id in modes
+     * with respect to flags, which could be 0, EDS_RAWMODE or EDS_ROTATEDMODE. If the driver
+     * backend uses dmDriverExtra then every DEVMODEW in the list must have the same dmDriverExtra value
+     *
+     * Following fields in DEVMODE must be set:
+     * dmSize, dmDriverExtra, dmFields, dmDisplayOrientation, dmBitsPerPel, dmPelsWidth, dmPelsHeight,
+     * dmDisplayFlags and dmDisplayFrequency
+     *
+     * Return FALSE on failure with parameters unchanged and TRUE on success.
+     * Use GetLastError() to get the error code on failure */
+    BOOL (*get_modes)(ULONG_PTR id, DWORD flags, DEVMODEW **modes, INT *mode_count);
+
+    /* free_modes will be called to free the mode list returned from get_modes */
+    void (*free_modes)(DEVMODEW *modes);
+
+    /* get_current_settings will be called to get the current setting of the device of id
+     * and return the setting in mode
+     *
+     * Following fields in DEVMODE must be set:
+     * dmDriverExtra, dmFields, dmDisplayOrientation, dmBitsPerPel, dmPelsWidth, dmPelsHeight,
+     * dmDisplayFlags, dmDisplayFrequency and dmPosition
+     *
+     * Return FALSE on failure with parameters unchanged and TRUE on success.
+     * Use GetLastError() to get the error code on failures */
+    BOOL (*get_current_settings)(ULONG_PTR id, DEVMODEW *mode);
+
+    /* set_current_settings will be called to change the display settings of the display device of id.
+     * mode must be a valid mode from get_modes with optional fields, such as dmPosition set
+     *
+     * Return DISP_CHANGE_* error codes, same in ChangeDisplaySettingsEx return values */
+    LONG (*set_current_settings)(ULONG_PTR id, DEVMODEW *mode);
+};
+
+extern void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *handler) DECLSPEC_HIDDEN;
+
 extern void X11DRV_init_desktop( Window win, unsigned int width, unsigned int height ) DECLSPEC_HIDDEN;
 extern void X11DRV_resize_desktop(BOOL) DECLSPEC_HIDDEN;
 extern BOOL is_virtual_desktop(void) DECLSPEC_HIDDEN;
