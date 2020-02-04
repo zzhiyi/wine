@@ -766,6 +766,15 @@ static BOOL get_primary_adapter(WCHAR *name)
     return FALSE;
 }
 
+static BOOL is_detached_mode(const DEVMODEW *mode)
+{
+    return mode->dmFields & DM_POSITION &&
+           mode->dmFields & DM_PELSWIDTH &&
+           mode->dmFields & DM_PELSHEIGHT &&
+           mode->dmPelsWidth == 0 &&
+           mode->dmPelsHeight == 0;
+}
+
 /***********************************************************************
  *              ChangeDisplaySettingsEx  (MACDRV.@)
  *
@@ -804,6 +813,12 @@ LONG CDECL macdrv_ChangeDisplaySettingsEx(LPCWSTR devname, LPDEVMODEW devmode,
 
         devname = primary_adapter;
         devmode = &default_mode;
+    }
+
+    if (is_detached_mode(devmode))
+    {
+        FIXME("Detaching adapter is currently unsupported.\n");
+        return DISP_CHANGE_SUCCESSFUL;
     }
 
     if (macdrv_get_displays(&displays, &num_displays))
