@@ -31,6 +31,7 @@
 #include "winreg.h"
 #include "wingdi.h"
 #include "wine/debug.h"
+#include "wine/heap.h"
 #include "wine/unicode.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(x11settings);
@@ -43,6 +44,7 @@ static unsigned int dd_max_modes = 0;
  */
 static const unsigned int depths_24[]  = {8, 16, 24};
 static const unsigned int depths_32[]  = {8, 16, 32};
+const DWORD *depths;
 
 /* pointers to functions that actually do the hard stuff */
 static int (*pGetCurrentMode)(void);
@@ -233,6 +235,34 @@ void X11DRV_Settings_AddDepthModes(void)
 unsigned int X11DRV_Settings_GetModeCount(void)
 {
     return dd_mode_count;
+}
+
+/* TODO: Remove the old handler interface usage once all backends are migrated to the new interface */
+static struct x11drv_settings_handler handler;
+
+/* Display modes for a device, protected by modes_section. Only cache one device at a time */
+static WCHAR cached_device_name[CCHDEVICENAME];
+static DWORD cached_flags;
+static DEVMODEW *cached_modes;
+static INT cached_mode_count;
+static CRITICAL_SECTION modes_section;
+static CRITICAL_SECTION_DEBUG modes_critsect_debug =
+{
+    0, 0, &modes_section,
+    {&modes_critsect_debug.ProcessLocksList, &modes_critsect_debug.ProcessLocksList},
+     0, 0, {(DWORD_PTR)(__FILE__ ": modes_section")}
+};
+static CRITICAL_SECTION modes_section = {&modes_critsect_debug, -1, 0, 0, 0, 0};
+
+static const char *const orientation_text[] = {"DMDO_DEFAULT", "DMDO_90", "DMDO_180", "DMDO_270"};
+
+void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *new_handler)
+{
+    if (new_handler->priority > handler.priority)
+    {
+        handler = *new_handler;
+        TRACE("Resolution settings are now handled by: %s\n", handler.name);
+    }
 }
 
 /***********************************************************************
@@ -506,6 +536,9 @@ POINT fs_hack_real_mode(void)
 void X11DRV_Settings_Init(void)
 {
     RECT primary = get_host_primary_monitor_rect();
+
+    depths = screen_bpp == 32 ? depths_32 : depths_24;
+
     X11DRV_Settings_SetHandlers("NoRes", 
                                 X11DRV_nores_GetCurrentMode, 
                                 X11DRV_nores_SetCurrentMode, 
@@ -669,7 +702,74 @@ BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmo
 {
     static const WCHAR dev_name[CCHDEVICENAME] =
         { 'W','i','n','e',' ','X','1','1',' ','d','r','i','v','e','r',0 };
+    DEVMODEW *modes, *mode;
+    INT mode_count;
+    ULONG_PTR id;
 
+    /* Use new interface if possible */
+    if (!handler.name)
+        goto old_interface;
+
+    if (n == ENUM_REGISTRY_SETTINGS)
+    {
+        TRACE("Getting %s default settings\n", wine_dbgstr_w(name));
+        if (!read_registry_settings(name, devmode))
+            return FALSE;
+        goto done;
+    }
+
+    if (n == ENUM_CURRENT_SETTINGS)
+    {
+        TRACE("Getting %s current settings\n", wine_dbgstr_w(name));
+        if (!handler.get_id(name, &id) || !handler.get_current_settings(id, devmode))
+            return FALSE;
+        goto done;
+    }
+
+    /* Refresh cache when necessary */
+    EnterCriticalSection(&modes_section);
+    if (n == 0 || lstrcmpiW(cached_device_name, name) || cached_flags != flags)
+    {
+        if (!handler.get_id(name, &id) || !handler.get_modes(id, flags, &modes, &mode_count))
+        {
+            LeaveCriticalSection(&modes_section);
+            return FALSE;
+        }
+
+        if (cached_modes)
+            handler.free_modes(cached_modes);
+        lstrcpyW(cached_device_name, name);
+        cached_flags = flags;
+        cached_modes = modes;
+        cached_mode_count = mode_count;
+    }
+
+    if (n >= cached_mode_count)
+    {
+        LeaveCriticalSection(&modes_section);
+        WARN("handler:%s device:%s mode index:%d not found\n", handler.name, wine_dbgstr_w(name), n);
+        SetLastError(ERROR_NO_MORE_FILES);
+        return FALSE;
+    }
+
+    mode = (DEVMODEW *)((BYTE *)cached_modes + (sizeof(*cached_modes) + cached_modes[0].dmDriverExtra) * n);
+    *devmode = *mode;
+    LeaveCriticalSection(&modes_section);
+
+done:
+    /* Set generic fields */
+    devmode->dmSize = FIELD_OFFSET(DEVMODEW, dmICMMethod);
+    devmode->dmDriverExtra = 0;
+    devmode->dmSpecVersion = DM_SPECVERSION;
+    devmode->dmDriverVersion = DM_SPECVERSION;
+    memcpy(devmode->dmDeviceName, dev_name, sizeof(dev_name));
+    TRACE("handler:%s device:%s mode index:%d position:(%d,%d) resolution:%dx%d frequency:%dHz depth:%dbits orientation:%s\n",
+          handler.name, wine_dbgstr_w(name), n, devmode->u1.s2.dmPosition.x, devmode->u1.s2.dmPosition.y,
+          devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmDisplayFrequency, devmode->dmBitsPerPel,
+          orientation_text[devmode->u1.s2.dmDisplayOrientation]);
+    return TRUE;
+
+old_interface:
     devmode->dmSize = FIELD_OFFSET(DEVMODEW, dmICMMethod);
     devmode->dmSpecVersion = DM_SPECVERSION;
     devmode->dmDriverVersion = DM_SPECVERSION;
@@ -729,6 +829,43 @@ BOOL is_detached_mode(const DEVMODEW *mode)
            mode->dmPelsHeight == 0;
 }
 
+static DEVMODEW *get_full_mode(DEVMODEW *driver_modes, INT driver_mode_count, DEVMODEW *user_mode)
+{
+    DEVMODEW *found = NULL;
+    INT i;
+
+    for (i = 0; i < driver_mode_count; ++i)
+    {
+        found = (DEVMODEW *)((BYTE *)driver_modes + (sizeof(*driver_modes) + driver_modes[0].dmDriverExtra) * i);
+
+        if (user_mode->dmFields & DM_BITSPERPEL && found->dmBitsPerPel != user_mode->dmBitsPerPel)
+            continue;
+        if (user_mode->dmFields & DM_PELSWIDTH && found->dmPelsWidth != user_mode->dmPelsWidth)
+            continue;
+        if (user_mode->dmFields & DM_PELSHEIGHT && found->dmPelsHeight != user_mode->dmPelsHeight)
+            continue;
+        if (user_mode->dmFields & DM_DISPLAYFREQUENCY &&
+            user_mode->dmDisplayFrequency &&
+            found->dmDisplayFrequency &&
+            user_mode->dmDisplayFrequency != 1 &&
+            user_mode->dmDisplayFrequency != found->dmDisplayFrequency)
+            continue;
+
+        break;
+    }
+
+    if (i == driver_mode_count)
+        return NULL;
+
+    if (user_mode->dmFields & DM_POSITION)
+    {
+        found->dmFields |= DM_POSITION;
+        found->u1.s2.dmPosition = user_mode->u1.s2.dmPosition;
+    }
+
+    return found;
+}
+
 /***********************************************************************
  *		ChangeDisplaySettingsEx  (X11DRV.@)
  *
@@ -738,9 +875,86 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
 {
     WCHAR primary_adapter[CCHDEVICENAME];
     char bpp_buffer[16], freq_buffer[18];
+    DEVMODEW *driver_modes = NULL, *full_mode;
     DEVMODEW default_mode;
-    DWORD i;
+    INT driver_mode_count;
+    ULONG_PTR id;
+    BOOL ret;
+    INT i;
 
+    /* Use new interface if possible */
+    if (!handler.name)
+        goto old_interface;
+
+    if (!get_primary_adapter(primary_adapter))
+        return DISP_CHANGE_FAILED;
+
+    if (!devname && !devmode)
+    {
+        default_mode.dmSize = sizeof(default_mode);
+        if (!EnumDisplaySettingsExW(primary_adapter, ENUM_REGISTRY_SETTINGS, &default_mode, 0))
+        {
+            ERR("Default mode not found for %s!\n", wine_dbgstr_w(primary_adapter));
+            return DISP_CHANGE_BADMODE;
+        }
+
+        devname = primary_adapter;
+        devmode = &default_mode;
+    }
+
+    if (flags & CDS_UPDATEREGISTRY && !write_registry_settings(devname, devmode))
+        return DISP_CHANGE_NOTUPDATED;
+
+    if (flags & (CDS_TEST | CDS_NORESET))
+        return DISP_CHANGE_SUCCESSFUL;
+
+    if (is_detached_mode(devmode))
+    {
+        FIXME("Detaching adapter is currently unsupported.\n");
+        return DISP_CHANGE_SUCCESSFUL;
+    }
+
+    if (!handler.get_id(devname, &id))
+        goto fail;
+
+    if (!handler.get_modes(id, 0, &driver_modes, &driver_mode_count))
+        goto fail;
+
+    full_mode = get_full_mode(driver_modes, driver_mode_count, devmode);
+    if (!full_mode)
+    {
+        handler.free_modes(driver_modes);
+        goto fail;
+    }
+
+    if (!(devmode->dmFields & DM_POSITION))
+    {
+        DEVMODEW current_mode;
+
+        current_mode.dmSize = sizeof(current_mode);
+        if (!EnumDisplaySettingsExW(devname, ENUM_CURRENT_SETTINGS, &current_mode, 0))
+        {
+            handler.free_modes(driver_modes);
+            goto fail;
+        }
+
+        full_mode->dmFields |= DM_POSITION;
+        full_mode->u1.s2.dmPosition = current_mode.u1.s2.dmPosition;
+    }
+
+    TRACE("handler:%s device:%s to position:(%d,%d) resolution:%dx%d frequency:%dHz depth:%dbits orientation:%s\n",
+          handler.name, wine_dbgstr_w(devname), full_mode->u1.s2.dmPosition.x, full_mode->u1.s2.dmPosition.y,
+          full_mode->dmPelsWidth, full_mode->dmPelsHeight, full_mode->dmDisplayFrequency, full_mode->dmBitsPerPel,
+          orientation_text[full_mode->u1.s2.dmDisplayOrientation]);
+
+    ret = handler.set_current_settings(id, full_mode);
+    if (driver_modes)
+        handler.free_modes(driver_modes);
+    if (ret == DISP_CHANGE_SUCCESSFUL)
+        X11DRV_DisplayDevices_Update(TRUE);
+    return ret;
+
+old_interface:
     if (!get_primary_adapter(primary_adapter))
         return DISP_CHANGE_FAILED;
 
@@ -808,6 +1022,7 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
         return DISP_CHANGE_SUCCESSFUL;
     }
 
+fail:
     /* no valid modes found, only print the fields we were trying to matching against */
     bpp_buffer[0] = freq_buffer[0] = 0;
     if (devmode->dmFields & DM_BITSPERPEL)
@@ -815,7 +1030,7 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
     if ((devmode->dmFields & DM_DISPLAYFREQUENCY) && (devmode->dmDisplayFrequency != 0))
         sprintf(freq_buffer, "freq=%u ", devmode->dmDisplayFrequency);
     ERR("No matching mode found: width=%d height=%d %s%s(%s)\n",
-        devmode->dmPelsWidth, devmode->dmPelsHeight, bpp_buffer, freq_buffer, handler_name);
+        devmode->dmPelsWidth, devmode->dmPelsHeight, bpp_buffer, freq_buffer, handler.name ? handler.name: handler_name );
 
     return DISP_CHANGE_BADMODE;
 }
