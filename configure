@@ -700,6 +700,8 @@ XSLT_CFLAGS
 XML2_LIBS
 XML2_CFLAGS
 PCAP_LIBS
+DRM_LIBS
+DRM_CFLAGS
 X_EXTRA_LIBS
 X_LIBS
 X_PRE_LIBS
@@ -848,6 +850,7 @@ with_coreaudio
 with_cups
 with_curses
 with_dbus
+with_drm
 with_faudio
 with_float_abi
 with_fontconfig
@@ -885,6 +888,8 @@ with_unwind
 with_v4l2
 with_vkd3d
 with_vulkan
+with_x11_xcb
+with_xcb_dri3
 with_xcomposite
 with_xcursor
 with_xfixes
@@ -1847,6 +1852,8 @@ OBJC
 OBJCFLAGS
 OBJCPP
 XMKMF
+DRM_CFLAGS
+DRM_LIBS
 XML2_CFLAGS
 XML2_LIBS
 XSLT_CFLAGS
@@ -2553,6 +2560,7 @@ Optional Packages:
   --without-cups          do not use CUPS
   --without-curses        do not use (n)curses
   --without-dbus          do not use DBus (dynamic device support)
+  --without-drm           do not use DRM (Direct Rendering Manager support)
   --without-faudio        do not use FAudio (XAudio2 support)
   --with-float-abi=abi    specify the ABI (soft|softfp|hard) for ARM platforms
   --without-fontconfig    do not use fontconfig
@@ -2591,6 +2599,8 @@ Optional Packages:
   --without-v4l2          do not use v4l2 (video capture)
   --without-vkd3d         do not use vkd3d (Direct3D 12 support)
   --without-vulkan        do not use Vulkan
+  --without-x11-xcb       do not use Xlib XCB support
+  --without-xcb-dri3      do not use XCB DRI3 support
   --without-xcomposite    do not use the Xcomposite extension
   --without-xcursor       do not use the Xcursor extension
   --without-xfixes        do not use Xfixes for clipboard change notifications
@@ -2624,6 +2634,8 @@ Some influential environment variables:
   OBJCFLAGS   Objective C compiler flags
   OBJCPP      Objective C preprocessor
   XMKMF       Path to xmkmf, Makefile generator for X Window System
+  DRM_CFLAGS  C compiler flags for libdrm, overriding pkg-config
+  DRM_LIBS    Linker flags for libdrm, overriding pkg-config
   XML2_CFLAGS C compiler flags for libxml-2.0, overriding pkg-config
   XML2_LIBS   Linker flags for libxml-2.0, overriding pkg-config
   XSLT_CFLAGS C compiler flags for libxslt, overriding pkg-config
@@ -3909,6 +3921,12 @@ if test "${with_dbus+set}" = set; then :
 fi
 
 
+# Check whether --with-drm was given.
+if test "${with_drm+set}" = set; then :
+  withval=$with_drm;
+fi
+
+
 # Check whether --with-faudio was given.
 if test "${with_faudio+set}" = set; then :
   withval=$with_faudio;
@@ -4128,6 +4146,18 @@ fi
 # Check whether --with-vulkan was given.
 if test "${with_vulkan+set}" = set; then :
   withval=$with_vulkan;
+fi
+
+
+# Check whether --with-x11-xcb was given.
+if test "${with_x11_xcb+set}" = set; then :
+  withval=$with_x11_xcb; if test "x$withval" = "xno"; then ac_cv_header_X11_Xlib_xcb_h=no; fi
+fi
+
+
+# Check whether --with-xcb-dri3 was given.
+if test "${with_xcb_dri3+set}" = set; then :
+  withval=$with_xcb_dri3; if test "x$withval" = "xno"; then ac_cv_header_xcb_dri3_h=no; fi
 fi
 
 
@@ -11397,6 +11427,7 @@ fi
     X_LIBS="$X_LIBS -lX11"
 
         for ac_header in X11/Xlib.h \
+                      X11/Xlib-xcb.h \
                       X11/XKBlib.h \
                       X11/Xutil.h \
                       X11/Xcursor/Xcursor.h \
@@ -12071,6 +12102,309 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
   xno) ;;
   *)   as_fn_error $? "libxrandr ${notice_platform}development files not found, XRandr won't be supported.
 This is an error since --with-xrandr was requested." "$LINENO" 5 ;;
+esac
+
+fi
+
+                if test "$ac_cv_header_X11_Xlib_xcb_h" = "yes" -a "x$ac_cv_lib_soname_Xrandr" != "x"
+        then
+            cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <X11/Xlib-xcb.h>
+int
+main ()
+{
+static typeof(XGetXCBConnection) * func; if (func) return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lX11-xcb" >&5
+$as_echo_n "checking for -lX11-xcb... " >&6; }
+if ${ac_cv_lib_soname_X11_xcb+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lX11-xcb $X_LIBS $X_EXTRA_LIBS $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char XGetXCBConnection ();
+int
+main ()
+{
+return XGetXCBConnection ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_X11_xcb=`$ac_cv_path_LDD conftest.exe | grep "X11-xcb" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_X11_xcb=`$OTOOL -L conftest$ac_exeext | grep "libX11-xcb\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libX11-xcb\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_X11_xcb=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libX11-xcb\\.$LIBEXT" | sed -e "s/^.*\\[\\(libX11-xcb\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_X11_xcb:+false} :; then :
+  ac_cv_lib_soname_X11_xcb=`$LDD conftest$ac_exeext | grep "libX11-xcb\\.$LIBEXT" | sed -e "s/^.*\(libX11-xcb\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+else
+  ac_cv_lib_soname_X11_xcb=
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_X11_xcb:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_X11_xcb" >&5
+$as_echo "$ac_cv_lib_soname_X11_xcb" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBX11_XCB "$ac_cv_lib_soname_X11_xcb"
+_ACEOF
+
+
+fi
+else
+  as_fn_append wine_notices "|libx11-xcb ${notice_platform}development files too old, Xlib XCB won't be supported."
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+        fi
+        if test "x$ac_cv_lib_soname_X11_xcb" = "x"; then :
+  case "x$with_x11_xcb" in
+  x)   as_fn_append wine_notices "|libx11-xcb ${notice_platform}development files not found, Xlib XCB won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "libx11-xcb ${notice_platform}development files not found, Xlib XCB won't be supported.
+This is an error since --with-x11_xcb was requested." "$LINENO" 5 ;;
+esac
+
+fi
+
+                if test "x$ac_cv_lib_soname_X11_xcb" != "x"
+        then
+            for ac_header in xcb/dri3.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "xcb/dri3.h" "ac_cv_header_xcb_dri3_h" "$ac_includes_default"
+if test "x$ac_cv_header_xcb_dri3_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_XCB_DRI3_H 1
+_ACEOF
+
+fi
+
+done
+
+            if test "$ac_cv_header_xcb_dri3_h" = "yes"
+            then
+                cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <xcb/dri3.h>
+int
+main ()
+{
+static typeof(xcb_dri3_open) * func; if (func) return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lxcb-dri3" >&5
+$as_echo_n "checking for -lxcb-dri3... " >&6; }
+if ${ac_cv_lib_soname_xcb_dri3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lxcb-dri3 $X_LIBS $X_EXTRA_LIBS $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char xcb_dri3_open ();
+int
+main ()
+{
+return xcb_dri3_open ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_xcb_dri3=`$ac_cv_path_LDD conftest.exe | grep "xcb-dri3" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_xcb_dri3=`$OTOOL -L conftest$ac_exeext | grep "libxcb-dri3\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libxcb-dri3\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_xcb_dri3=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libxcb-dri3\\.$LIBEXT" | sed -e "s/^.*\\[\\(libxcb-dri3\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_xcb_dri3:+false} :; then :
+  ac_cv_lib_soname_xcb_dri3=`$LDD conftest$ac_exeext | grep "libxcb-dri3\\.$LIBEXT" | sed -e "s/^.*\(libxcb-dri3\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+else
+  ac_cv_lib_soname_xcb_dri3=
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_xcb_dri3:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_xcb_dri3" >&5
+$as_echo "$ac_cv_lib_soname_xcb_dri3" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBXCB_DRI3 "$ac_cv_lib_soname_xcb_dri3"
+_ACEOF
+
+
+fi
+else
+  as_fn_append wine_notices "|libxcb-dri3 ${notice_platform}development files too old, XCB DRI3 won't be supported."
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+            fi
+        fi
+        if test "x$ac_cv_lib_soname_xcb_dri3" = "x"; then :
+  case "x$with_xcb_dri3" in
+  x)   as_fn_append wine_notices "|libxcb-dri3 ${notice_platform}development files not found, XCB DRI3 won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "libxcb-dri3 ${notice_platform}development files not found, XCB DRI3 won't be supported.
+This is an error since --with-xcb_dri3 was requested." "$LINENO" 5 ;;
+esac
+
+fi
+
+                if test "x$with_drm" != "xno" -a "x$ac_cv_lib_soname_Xrandr" != "x"
+        then
+            if ${DRM_CFLAGS:+false} :; then :
+  if ${PKG_CONFIG+:} false; then :
+  DRM_CFLAGS=`$PKG_CONFIG --cflags libdrm 2>/dev/null`
+fi
+fi
+
+if ${DRM_LIBS:+false} :; then :
+  if ${PKG_CONFIG+:} false; then :
+  DRM_LIBS=`$PKG_CONFIG --libs libdrm 2>/dev/null`
+fi
+fi
+
+
+$as_echo "$as_me:${as_lineno-$LINENO}: libdrm cflags: $DRM_CFLAGS" >&5
+$as_echo "$as_me:${as_lineno-$LINENO}: libdrm libs: $DRM_LIBS" >&5
+ac_save_CPPFLAGS=$CPPFLAGS
+CPPFLAGS="$CPPFLAGS $DRM_CFLAGS"
+for ac_header in xf86drm.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "xf86drm.h" "ac_cv_header_xf86drm_h" "$ac_includes_default"
+if test "x$ac_cv_header_xf86drm_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_XF86DRM_H 1
+_ACEOF
+
+fi
+
+done
+
+                if test "$ac_cv_header_xf86drm_h" = "yes"
+                then
+                    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <xf86drm.h>
+int
+main ()
+{
+static typeof(drmGetDevice) * func; if (func) return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -ldrm" >&5
+$as_echo_n "checking for -ldrm... " >&6; }
+if ${ac_cv_lib_soname_drm+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-ldrm $DRM_LIBS $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char drmGetDevice ();
+int
+main ()
+{
+return drmGetDevice ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_drm=`$ac_cv_path_LDD conftest.exe | grep "drm" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_drm=`$OTOOL -L conftest$ac_exeext | grep "libdrm\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libdrm\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_drm=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libdrm\\.$LIBEXT" | sed -e "s/^.*\\[\\(libdrm\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_drm:+false} :; then :
+  ac_cv_lib_soname_drm=`$LDD conftest$ac_exeext | grep "libdrm\\.$LIBEXT" | sed -e "s/^.*\(libdrm\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+else
+  ac_cv_lib_soname_drm=
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_drm:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_drm" >&5
+$as_echo "$ac_cv_lib_soname_drm" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBDRM "$ac_cv_lib_soname_drm"
+_ACEOF
+
+
+fi
+else
+  as_fn_append wine_notices "|libdrm ${notice_platform}development files too old, DRM may not work."
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+                fi
+CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$DRM_CFLAGS" || DRM_CFLAGS=`echo " $DRM_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$DRM_LIBS" || DRM_LIBS=`echo " $DRM_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
+
+        fi
+        if test "x$ac_cv_lib_soname_drm" = "x"; then :
+  case "x$with_drm" in
+  x)   as_fn_append wine_notices "|libdrm ${notice_platform}development files not found, DRM won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "libdrm ${notice_platform}development files not found, DRM won't be supported.
+This is an error since --with-drm was requested." "$LINENO" 5 ;;
 esac
 
 fi
@@ -20009,6 +20343,8 @@ X_CFLAGS = $X_CFLAGS
 X_PRE_LIBS = $X_PRE_LIBS
 X_LIBS = $X_LIBS
 X_EXTRA_LIBS = $X_EXTRA_LIBS
+DRM_CFLAGS = $DRM_CFLAGS
+DRM_LIBS = $DRM_LIBS
 PCAP_LIBS = $PCAP_LIBS
 XML2_CFLAGS = $XML2_CFLAGS
 XML2_LIBS = $XML2_LIBS
