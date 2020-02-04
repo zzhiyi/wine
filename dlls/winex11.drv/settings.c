@@ -924,38 +924,54 @@ LONG CDECL X11DRV_ChangeDisplaySettingsEx( LPCWSTR devname, LPDEVMODEW devmode,
     if (flags & (CDS_TEST | CDS_NORESET))
         return DISP_CHANGE_SUCCESSFUL;
 
-    if (is_detached_mode(devmode))
-    {
-        FIXME("Detaching adapter is currently unsupported.\n");
-        return DISP_CHANGE_SUCCESSFUL;
-    }
-
     if (!handler.get_id(devname, &id))
         goto fail;
 
-    if (!handler.get_modes(id, 0, &driver_modes, &driver_mode_count))
-        goto fail;
-
-    full_mode = get_full_mode(driver_modes, driver_mode_count, devmode);
-    if (!full_mode)
+    if (is_detached_mode(devmode))
     {
-        handler.free_modes(driver_modes);
-        goto fail;
+        INT attached_count = 0;
+        DISPLAY_DEVICEW dd;
+
+        dd.cb = sizeof(dd);
+        for (i = 0; EnumDisplayDevicesW(NULL, i, &dd, 0); ++i)
+        {
+            if (dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)
+                ++attached_count;
+        }
+
+        /* Can't detach the only attached adapter */
+        if (attached_count <= 1)
+            return DISP_CHANGE_SUCCESSFUL;
+
+        full_mode = devmode;
     }
-
-    if (!(devmode->dmFields & DM_POSITION))
+    else
     {
-        DEVMODEW current_mode;
+        /* Find a mode that has all the required fields */
+        if (!handler.get_modes(id, 0, &driver_modes, &driver_mode_count))
+            goto fail;
 
-        current_mode.dmSize = sizeof(current_mode);
-        if (!EnumDisplaySettingsExW(devname, ENUM_CURRENT_SETTINGS, &current_mode, 0))
+        full_mode = get_full_mode(driver_modes, driver_mode_count, devmode);
+        if (!full_mode)
         {
             handler.free_modes(driver_modes);
             goto fail;
         }
 
-        full_mode->dmFields |= DM_POSITION;
-        full_mode->u1.s2.dmPosition = current_mode.u1.s2.dmPosition;
+        if (!(devmode->dmFields & DM_POSITION))
+        {
+            DEVMODEW current_mode;
+    
+            current_mode.dmSize = sizeof(current_mode);
+            if (!EnumDisplaySettingsExW(devname, ENUM_CURRENT_SETTINGS, &current_mode, 0))
+            {
+                handler.free_modes(driver_modes);
+                goto fail;
+            }
+    
+            full_mode->dmFields |= DM_POSITION;
+            full_mode->u1.s2.dmPosition = current_mode.u1.s2.dmPosition;
+        }
     }
 
     TRACE("handler:%s device:%s to position:(%d,%d) resolution:%dx%d frequency:%dHz depth:%dbits orientation:%s\n",
