@@ -780,7 +780,7 @@ done:
     devmode->dmDriverExtra = 0;
     devmode->dmSpecVersion = DM_SPECVERSION;
     devmode->dmDriverVersion = DM_SPECVERSION;
-    memcpy(devmode->dmDeviceName, dev_name, sizeof(dev_name));
+    lstrcpyW(devmode->dmDeviceName, dev_name);
     TRACE("handler:%s device:%s mode index:%d position:(%d,%d) resolution:%dx%d frequency:%dHz depth:%dbits orientation:%s\n",
           handler.name, wine_dbgstr_w(name), n, devmode->u1.s2.dmPosition.x, devmode->u1.s2.dmPosition.y,
           devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmDisplayFrequency, devmode->dmBitsPerPel,
