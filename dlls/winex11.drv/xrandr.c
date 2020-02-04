@@ -33,6 +33,15 @@ WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 #include <X11/Xlib.h>
 #include <X11/extensions/Xrandr.h>
+#ifdef HAVE_X11_XLIB_XCB_H
+#include <X11/Xlib-xcb.h>
+#endif
+#ifdef HAVE_XCB_DRI3_H
+#include <xcb/dri3.h>
+#endif
+#ifdef HAVE_XF86DRM_H
+#include <xf86drm.h>
+#endif
 #include "x11drv.h"
 
 #include "wine/heap.h"
@@ -77,6 +86,25 @@ MAKE_FUNCPTR(XRRGetProviderInfo)
 MAKE_FUNCPTR(XRRFreeProviderInfo)
 #endif
 
+#if defined(SONAME_LIBX11_XCB) && defined(SONAME_LIBXCB_DRI3)
+MAKE_FUNCPTR(XGetXCBConnection)
+MAKE_FUNCPTR(xcb_dri3_id)
+MAKE_FUNCPTR(xcb_dri3_open)
+MAKE_FUNCPTR(xcb_dri3_open_reply)
+MAKE_FUNCPTR(xcb_dri3_open_reply_fds)
+MAKE_FUNCPTR(xcb_get_extension_data)
+static void *x11_xcb_handle;
+static void *xcb_dri3_handle;
+static BOOL dri3_loaded;
+#endif
+
+#ifdef SONAME_LIBDRM
+MAKE_FUNCPTR(drmFreeDevice)
+MAKE_FUNCPTR(drmGetDevice)
+static void *drm_handle;
+static BOOL drm_loaded;
+#endif
+
 #undef MAKE_FUNCPTR
 
 static struct x11drv_mode_info *dd_modes;
@@ -92,50 +120,74 @@ static int load_xrandr(void)
         (xrandr_handle = wine_dlopen(SONAME_LIBXRANDR, RTLD_NOW, NULL, 0)))
     {
 
-#define LOAD_FUNCPTR(f) \
-        if((p##f = wine_dlsym(xrandr_handle, #f, NULL, 0)) == NULL) \
+#define LOAD_SYMBOL(library, symbol) \
+        if((p##symbol = wine_dlsym(library##_handle, #symbol, NULL, 0)) == NULL) \
             goto sym_not_found;
 
-        LOAD_FUNCPTR(XRRConfigCurrentConfiguration)
-        LOAD_FUNCPTR(XRRConfigCurrentRate)
-        LOAD_FUNCPTR(XRRFreeScreenConfigInfo)
-        LOAD_FUNCPTR(XRRGetScreenInfo)
-        LOAD_FUNCPTR(XRRQueryExtension)
-        LOAD_FUNCPTR(XRRQueryVersion)
-        LOAD_FUNCPTR(XRRRates)
-        LOAD_FUNCPTR(XRRSetScreenConfig)
-        LOAD_FUNCPTR(XRRSetScreenConfigAndRate)
-        LOAD_FUNCPTR(XRRSizes)
+        LOAD_SYMBOL(xrandr, XRRConfigCurrentConfiguration)
+        LOAD_SYMBOL(xrandr, XRRConfigCurrentRate)
+        LOAD_SYMBOL(xrandr, XRRFreeScreenConfigInfo)
+        LOAD_SYMBOL(xrandr, XRRGetScreenInfo)
+        LOAD_SYMBOL(xrandr, XRRQueryExtension)
+        LOAD_SYMBOL(xrandr, XRRQueryVersion)
+        LOAD_SYMBOL(xrandr, XRRRates)
+        LOAD_SYMBOL(xrandr, XRRSetScreenConfig)
+        LOAD_SYMBOL(xrandr, XRRSetScreenConfigAndRate)
+        LOAD_SYMBOL(xrandr, XRRSizes)
         r = 1;
 
 #ifdef HAVE_XRRGETSCREENRESOURCES
-        LOAD_FUNCPTR(XRRFreeCrtcInfo)
-        LOAD_FUNCPTR(XRRFreeOutputInfo)
-        LOAD_FUNCPTR(XRRFreeScreenResources)
-        LOAD_FUNCPTR(XRRGetCrtcInfo)
-        LOAD_FUNCPTR(XRRGetOutputInfo)
-        LOAD_FUNCPTR(XRRGetScreenResources)
-        LOAD_FUNCPTR(XRRGetScreenSizeRange)
-        LOAD_FUNCPTR(XRRSetCrtcConfig)
-        LOAD_FUNCPTR(XRRSetScreenSize)
+        LOAD_SYMBOL(xrandr, XRRFreeCrtcInfo)
+        LOAD_SYMBOL(xrandr, XRRFreeOutputInfo)
+        LOAD_SYMBOL(xrandr, XRRFreeScreenResources)
+        LOAD_SYMBOL(xrandr, XRRGetCrtcInfo)
+        LOAD_SYMBOL(xrandr, XRRGetOutputInfo)
+        LOAD_SYMBOL(xrandr, XRRGetScreenResources)
+        LOAD_SYMBOL(xrandr, XRRGetScreenSizeRange)
+        LOAD_SYMBOL(xrandr, XRRSetCrtcConfig)
+        LOAD_SYMBOL(xrandr, XRRSetScreenSize)
         r = 2;
 #endif
 
 #ifdef HAVE_XRRGETPROVIDERRESOURCES
-        LOAD_FUNCPTR(XRRSelectInput)
-        LOAD_FUNCPTR(XRRGetOutputPrimary)
-        LOAD_FUNCPTR(XRRGetProviderResources)
-        LOAD_FUNCPTR(XRRFreeProviderResources)
-        LOAD_FUNCPTR(XRRGetProviderInfo)
-        LOAD_FUNCPTR(XRRFreeProviderInfo)
+        LOAD_SYMBOL(xrandr, XRRSelectInput)
+        LOAD_SYMBOL(xrandr, XRRGetOutputPrimary)
+        LOAD_SYMBOL(xrandr, XRRGetProviderResources)
+        LOAD_SYMBOL(xrandr, XRRFreeProviderResources)
+        LOAD_SYMBOL(xrandr, XRRGetProviderInfo)
+        LOAD_SYMBOL(xrandr, XRRFreeProviderInfo)
         r = 4;
 #endif
 
-#undef LOAD_FUNCPTR
+#if defined(SONAME_LIBX11_XCB) && defined(SONAME_LIBXCB_DRI3)
+        if ((x11_xcb_handle = wine_dlopen(SONAME_LIBX11_XCB, RTLD_NOW, NULL, 0)) &&
+            (xcb_dri3_handle = wine_dlopen(SONAME_LIBXCB_DRI3, RTLD_NOW, NULL, 0)))
+        {
+            LOAD_SYMBOL(x11_xcb, XGetXCBConnection)
+            LOAD_SYMBOL(xcb_dri3, xcb_dri3_id)
+            LOAD_SYMBOL(xcb_dri3, xcb_dri3_open)
+            LOAD_SYMBOL(xcb_dri3, xcb_dri3_open_reply)
+            LOAD_SYMBOL(xcb_dri3, xcb_dri3_open_reply_fds)
+            LOAD_SYMBOL(xcb_dri3, xcb_get_extension_data)
+            dri3_loaded = TRUE;
+        }
+#endif
+
+#ifdef SONAME_LIBDRM
+        if ((drm_handle = wine_dlopen(SONAME_LIBDRM, RTLD_NOW, NULL, 0)))
+        {
+            LOAD_SYMBOL(drm, drmFreeDevice)
+            LOAD_SYMBOL(drm, drmGetDevice)
+            drm_loaded = TRUE;
+        }
+#endif
+
+#undef LOAD_SYMBOL
+    }
 
 sym_not_found:
-        if (!r)  TRACE("Unable to load function ptrs from XRandR library\n");
-    }
+    if (!r)
+        TRACE("Unable to load function ptrs from XRandR library\n");
     return r;
 }
 
@@ -716,6 +768,181 @@ static BOOL is_crtc_primary( RECT primary, const XRRCrtcInfo *crtc )
            crtc->y + crtc->height == primary.bottom;
 }
 
+static int get_drm_device_fd_from_provider( RRProvider provider )
+{
+#if defined(SONAME_LIBX11_XCB) && defined(SONAME_LIBXCB_DRI3)
+    const xcb_query_extension_reply_t *extension;
+    xcb_dri3_open_cookie_t cookie;
+    xcb_dri3_open_reply_t *reply;
+    xcb_connection_t *connection;
+    int *fds, fd;
+
+    if (!dri3_loaded)
+        return -1;
+
+    connection = pXGetXCBConnection( gdi_display );
+    extension = pxcb_get_extension_data( connection, pxcb_dri3_id );
+    if (!extension || !extension->present)
+    {
+        WARN("DRI3 is unsupported.\n");
+        return -1;
+    }
+
+    cookie = pxcb_dri3_open( connection, DefaultRootWindow( gdi_display ), provider );
+    reply = pxcb_dri3_open_reply( connection, cookie, NULL );
+
+    if (!reply)
+        return -1;
+
+    if (reply->nfd != 1)
+    {
+        free( reply );
+        return -1;
+    }
+
+    fds = pxcb_dri3_open_reply_fds( connection, reply );
+    fd = fds[0];
+    free( reply );
+    fcntl( fd, F_SETFD, FD_CLOEXEC );
+    return fd;
+#endif /* defined(SONAME_LIBX11_XCB) && defined(SONAME_LIBXCB_DRI3) */
+
+    WARN("DRI3 support not compiled in. Finding a DRM device with a RandR provider won't work!\n");
+    return -1;
+}
+
+/* Fallback when DRI3 is unavailable. For example, GPUs using NVIDIA proprietary drivers.
+ * This function may not get the correct device when there are multiple GPUs present */
+static int get_drm_device_fd_from_index( int gpu_index )
+{
+#ifdef __linux__
+    char device_path[32];
+    int fd;
+
+    sprintf( device_path, "/dev/dri/card%d", gpu_index );
+    fd = open( device_path, O_RDONLY );
+    if (fd < 0)
+        return -1;
+
+    fcntl( fd, F_SETFD, FD_CLOEXEC );
+    return fd;
+#endif /* __linux__ */
+
+    return -1;
+}
+
+#ifdef __linux__
+static unsigned int read_id( const char *device_name, const char *id_name )
+{
+    char filename[MAX_PATH];
+    unsigned int id = 0;
+    FILE *file;
+
+    sprintf( filename, "%s/%s", device_name, id_name );
+    file = fopen( filename, "r" );
+    if (!file)
+        return 0;
+
+    fscanf( file, "%x", &id );
+    fclose( file );
+    return id;
+}
+#endif /* __linux__ */
+
+static BOOL get_gpu_pci_id( struct x11drv_gpu *gpu, int gpu_index )
+{
+    int fd = get_drm_device_fd_from_provider( (RRProvider)gpu->id );
+
+    if (fd < 0)
+        fd = get_drm_device_fd_from_index( gpu_index );
+
+    if (fd < 0)
+    {
+        WARN("Failed to get DRM device fd.\n");
+        return FALSE;
+    }
+
+#ifdef SONAME_LIBDRM
+    {
+        drmDevice *device;
+        int ret;
+
+        if (!drm_loaded)
+        {
+            close( fd );
+            return FALSE;
+        }
+
+        ret = pdrmGetDevice( fd, &device );
+        close( fd );
+
+        if (ret != 0)
+            return FALSE;
+
+        if (device->bustype != DRM_BUS_PCI)
+        {
+            pdrmFreeDevice( &device );
+            return FALSE;
+        }
+
+        gpu->vendor_id = device->deviceinfo.pci->vendor_id;
+        gpu->device_id = device->deviceinfo.pci->device_id;
+        gpu->subsys_id = (UINT)device->deviceinfo.pci->subdevice_id << 16 | device->deviceinfo.pci->subvendor_id;
+        gpu->revision_id = device->deviceinfo.pci->revision_id;
+        pdrmFreeDevice( &device );
+        return TRUE;
+    }
+#endif /* SONAME_LIBDRM */
+
+    /* Fallback on Linux when libdrm is too old to have drmGetDevice() */
+#ifdef __linux__
+    {
+        char fd_path[32], link[MAX_PATH], device_path[128], node_name[64];
+        char *subsystem_name, subsystem_path[MAX_PATH];
+        int ret;
+
+        /* Get DRM device path from fd */
+        sprintf( fd_path, "/proc/self/fd/%d", fd );
+        ret = readlink( fd_path, link, sizeof(link) - 1 );
+        close( fd );
+
+        if (ret < 0)
+            return FALSE;
+
+        link[ret] = 0;
+        if (sscanf( link, "/dev/dri/%63s", node_name ) != 1)
+            return FALSE;
+
+        sprintf( device_path, "/sys/class/drm/%s/device", node_name );
+        sprintf( subsystem_path, "%s/subsystem", device_path );
+
+        /* Check if device is using PCI bus */
+        ret = readlink( subsystem_path, link, sizeof(link) - 1 );
+        if (ret < 0)
+            return FALSE;
+
+        link[ret] = 0;
+        subsystem_name = strrchr( link, '/' );
+        if (!subsystem_name)
+            return FALSE;
+
+        if (strncmp( subsystem_name + 1, "pci", 3 ))
+            return FALSE;
+
+        /* Read IDs */
+        gpu->vendor_id = read_id( device_path, "vendor" );
+        gpu->device_id = read_id( device_path, "device" );
+        gpu->subsys_id = read_id( device_path, "subsystem_device" ) << 16 | read_id( device_path, "subsystem_vendor" );
+        gpu->revision_id = read_id( device_path, "revision" );
+        return TRUE;
+    }
+#endif /* __linux__ */
+
+    close( fd );
+    WARN("DRM support not compiled in. No valid PCI ID will be reported for GPUs.\n");
+    return FALSE;
+}
+
 static BOOL xrandr14_get_gpus( struct x11drv_gpu **new_gpus, int *count )
 {
     static const WCHAR wine_adapterW[] = {'W','i','n','e',' ','A','d','a','p','t','e','r',0};
@@ -779,9 +1006,13 @@ static BOOL xrandr14_get_gpus( struct x11drv_gpu **new_gpus, int *count )
 
         gpus[i].id = provider_resources->providers[i];
         MultiByteToWideChar( CP_UTF8, 0, provider_info->name, -1, gpus[i].name, ARRAY_SIZE(gpus[i].name) );
-        /* PCI IDs are all zero because there is currently no portable way to get it via XRandR. Some AMD drivers report
-         * their PCI address in the name but many others don't */
         pXRRFreeProviderInfo( provider_info );
+
+        if (!get_gpu_pci_id( &gpus[i], i ))
+            WARN("Failed to get PCI ID for GPU %s\n", wine_dbgstr_w(gpus[i].name));
+
+        TRACE("name:%s vendor id:0x%04x device id:0x%04x subsystem id:0x%08x revision id:0x%02x\n",
+              wine_dbgstr_w(gpus[i].name), gpus[i].vendor_id, gpus[i].device_id, gpus[i].subsys_id, gpus[i].revision_id);
     }
 
     /* Make primary GPU the first */
