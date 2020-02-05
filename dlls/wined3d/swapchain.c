@@ -852,6 +852,7 @@ static HRESULT wined3d_swapchain_init(struct wined3d_swapchain *swapchain, struc
 {
     const struct wined3d_adapter *adapter = device->adapter;
     struct wined3d_resource_desc texture_desc;
+    struct wined3d_output_desc output_desc;
     struct wined3d_output *output;
     BOOL displaymode_set = FALSE;
     DWORD texture_flags = 0;
@@ -910,8 +911,15 @@ static HRESULT wined3d_swapchain_init(struct wined3d_swapchain *swapchain, struc
     }
     else
     {
+        if (FAILED(hr = wined3d_swapchain_get_output(swapchain, &output)))
+            return hr;
+
+        if (FAILED(hr = wined3d_output_get_desc(device->wined3d, output->ordinal, &output_desc)))
+            return hr;
+
         wined3d_swapchain_state_setup_fullscreen(&swapchain->state,
-                window, desc->backbuffer_width, desc->backbuffer_height);
+                window, output_desc.desktop_rect.left, output_desc.desktop_rect.top,
+                desc->backbuffer_width, desc->backbuffer_height);
     }
     swapchain->state.desc = *desc;
     wined3d_swapchain_apply_sample_count_override(swapchain, swapchain->state.desc.backbuffer_format,
@@ -1257,6 +1265,7 @@ void wined3d_swapchain_activate(struct wined3d_swapchain *swapchain, BOOL activa
 {
     struct wined3d_device *device = swapchain->device;
     HWND window = swapchain->state.device_window;
+    struct wined3d_output_desc output_desc;
     struct wined3d_output *output;
     unsigned int screensaver_active;
     BOOL focus_messages, filter;
@@ -1268,6 +1277,9 @@ void wined3d_swapchain_activate(struct wined3d_swapchain *swapchain, BOOL activa
 
     if (!(focus_messages = device->wined3d->flags & WINED3D_FOCUS_MESSAGES))
         filter = wined3d_filter_messages(window, TRUE);
+
+    if (FAILED(wined3d_swapchain_get_output(swapchain, &output)))
+        ERR("Failed to get output.\n");
 
     if (activate)
     {
@@ -1284,14 +1296,17 @@ void wined3d_swapchain_activate(struct wined3d_swapchain *swapchain, BOOL activa
              *
              * Guild Wars 1 wants a WINDOWPOSCHANGED message on the device window to
              * resume drawing after a focus loss. */
-            SetWindowPos(window, NULL, 0, 0, swapchain->state.desc.backbuffer_width,
-                    swapchain->state.desc.backbuffer_height, SWP_NOACTIVATE | SWP_NOZORDER);
+            if (FAILED(wined3d_output_get_desc(device->wined3d, output->ordinal, &output_desc)))
+                ERR("Failed to get output description.\n");
+
+            SetWindowPos(window, NULL, output_desc.desktop_rect.left, output_desc.desktop_rect.top,
+                    swapchain->state.desc.backbuffer_width, swapchain->state.desc.backbuffer_height,
+                    SWP_NOACTIVATE | SWP_NOZORDER);
         }
 
         if (device->wined3d->flags & WINED3D_RESTORE_MODE_ON_ACTIVATE)
         {
-            if (FAILED(wined3d_swapchain_get_output(swapchain, &output)) ||
-                    FAILED(wined3d_output_set_display_mode(device->wined3d,
+            if (FAILED(wined3d_output_set_display_mode(device->wined3d,
                     output->ordinal, &swapchain->state.d3d_mode)))
                 ERR("Failed to set display mode.\n");
         }
@@ -1307,8 +1322,7 @@ void wined3d_swapchain_activate(struct wined3d_swapchain *swapchain, BOOL activa
             device->restore_screensaver = FALSE;
         }
 
-        if (FAILED(wined3d_swapchain_get_output(swapchain, &output)) ||
-                FAILED(wined3d_output_set_display_mode(device->wined3d,
+        if (FAILED(wined3d_output_set_display_mode(device->wined3d,
                 output->ordinal, NULL)))
             ERR("Failed to set display mode.\n");
 
@@ -1535,7 +1549,7 @@ static LONG fullscreen_exstyle(LONG exstyle)
 }
 
 HRESULT wined3d_swapchain_state_setup_fullscreen(struct wined3d_swapchain_state *state,
-        HWND window, unsigned int w, unsigned int h)
+        HWND window, int left, int top, int width, int height)
 {
     LONG style, exstyle;
     BOOL filter;
@@ -1567,7 +1581,8 @@ HRESULT wined3d_swapchain_state_setup_fullscreen(struct wined3d_swapchain_state 
 
     SetWindowLongW(window, GWL_STYLE, style);
     SetWindowLongW(window, GWL_EXSTYLE, exstyle);
-    SetWindowPos(window, HWND_TOPMOST, 0, 0, w, h, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    SetWindowPos(window, HWND_TOPMOST, left, top, width, height,
+            SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
 
     wined3d_filter_messages(window, filter);
 
@@ -1680,11 +1695,16 @@ HRESULT CDECL wined3d_swapchain_state_set_fullscreen(struct wined3d_swapchain_st
     {
         unsigned int width = actual_mode.width;
         unsigned int height = actual_mode.height;
+        struct wined3d_output_desc output_desc;
+
+        if (FAILED(hr = wined3d_output_get_desc(wined3d, output_idx, &output_desc)))
+            return hr;
 
         if (state->desc.windowed)
         {
             /* Switch from windowed to fullscreen */
-            if (FAILED(hr = wined3d_swapchain_state_setup_fullscreen(state, state->device_window, width, height)))
+            if (FAILED(hr = wined3d_swapchain_state_setup_fullscreen(state, state->device_window,
+                    output_desc.desktop_rect.left, output_desc.desktop_rect.top, width, height)))
                 return hr;
         }
         else
@@ -1694,7 +1714,8 @@ HRESULT CDECL wined3d_swapchain_state_set_fullscreen(struct wined3d_swapchain_st
 
             /* Fullscreen -> fullscreen mode change */
             filter = wined3d_filter_messages(window, TRUE);
-            MoveWindow(window, 0, 0, width, height, TRUE);
+            MoveWindow(window, output_desc.desktop_rect.left, output_desc.desktop_rect.top,
+                    width, height, TRUE);
             ShowWindow(window, SW_SHOW);
             wined3d_filter_messages(window, filter);
         }

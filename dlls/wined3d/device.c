@@ -5231,6 +5231,9 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
             || swapchain_desc->backbuffer_height != current_desc->backbuffer_height;
     windowed = current_desc->windowed;
 
+    if (FAILED(hr = wined3d_swapchain_get_output(swapchain, &output)))
+        return hr;
+
     if (!swapchain_desc->windowed != !windowed || swapchain->reapply_mode
             || mode || (!swapchain_desc->windowed && backbuffer_resized))
     {
@@ -5247,8 +5250,6 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
                 return hr;
             }
         }
-        if (FAILED(hr = wined3d_swapchain_get_output(swapchain, &output)))
-            return hr;
         if (FAILED(hr = wined3d_swapchain_state_set_fullscreen(&swapchain->state,
                 swapchain_desc, device->wined3d, output->ordinal, mode)))
             return hr;
@@ -5261,13 +5262,19 @@ HRESULT CDECL wined3d_device_reset(struct wined3d_device *device,
     {
         DWORD style = swapchain_state->style;
         DWORD exstyle = swapchain_state->exstyle;
+        struct wined3d_output_desc output_desc;
+
         /* If we're in fullscreen, and the mode wasn't changed, we have to get
          * the window back into the right position. Some applications
          * (Battlefield 2, Guild Wars) move it and then call Reset() to clean
          * up their mess. Guild Wars also loses the device during that. */
+        if (FAILED(hr = wined3d_output_get_desc(device->wined3d, output->ordinal, &output_desc)))
+            return hr;
+
         swapchain_state->style = 0;
         swapchain_state->exstyle = 0;
         wined3d_swapchain_state_setup_fullscreen(swapchain_state, swapchain_state->device_window,
+                output_desc.desktop_rect.left, output_desc.desktop_rect.top,
                 swapchain_desc->backbuffer_width, swapchain_desc->backbuffer_height);
         swapchain_state->style = style;
         swapchain_state->exstyle = exstyle;
