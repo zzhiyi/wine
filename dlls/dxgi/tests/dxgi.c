@@ -457,9 +457,9 @@ static void compute_expected_swapchain_fullscreen_state_after_fullscreen_change_
     state->fullscreen = TRUE;
     if (swapchain_desc->Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH)
     {
-        unsigned int new_x = (old_monitor_rect->left >= 0)
+        int new_x = (old_monitor_rect->left >= 0)
                 ? old_monitor_rect->left : old_monitor_rect->right - new_width;
-        unsigned new_y = (old_monitor_rect->top >= 0)
+        int new_y = (old_monitor_rect->top >= 0)
                 ? old_monitor_rect->top : old_monitor_rect->bottom - new_height;
         RECT new_monitor_rect = {0, 0, new_width, new_height};
         OffsetRect(&new_monitor_rect, new_x, new_y);
