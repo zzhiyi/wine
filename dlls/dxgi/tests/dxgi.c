@@ -913,6 +913,10 @@ static void test_adapter_luid(void)
     }
 
     hr = IDXGIFactory4_EnumAdapterByLuid(factory4, device_adapter_desc.AdapterLuid,
+            &IID_IDXGIAdapter, NULL);
+    ok(hr == DXGI_ERROR_INVALID_CALL, "Got unexpected hr %#x.\n", hr);
+
+    hr = IDXGIFactory4_EnumAdapterByLuid(factory4, device_adapter_desc.AdapterLuid,
             &IID_IDXGIAdapter, (void **)&adapter);
     todo_wine ok(hr == S_OK, "Failed to enum adapter by LUID, hr %#x.\n", hr);
     if (SUCCEEDED(hr))
@@ -1170,6 +1174,9 @@ static void test_output(void)
 
     hr = IDXGIDevice_GetAdapter(device, &adapter);
     ok(SUCCEEDED(hr), "GetAdapter failed, hr %#x.\n", hr);
+
+    hr = IDXGIAdapter_EnumOutputs(adapter, 0, NULL);
+    ok(hr == E_INVALIDARG, "Got unexpected hr %#x.\n", hr);
 
     hr = IDXGIAdapter_EnumOutputs(adapter, 0, &output);
     if (hr == DXGI_ERROR_NOT_FOUND)
