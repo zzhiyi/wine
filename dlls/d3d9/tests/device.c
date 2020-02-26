@@ -13835,7 +13835,6 @@ static void test_cursor_clipping(void)
         get_virtual_rect(&virtual_rect);
         ok(GetClipCursor(&clip_rect), "Adapter %u: GetClipCursor failed, error %#x.\n", adapter_idx,
                 GetLastError());
-        todo_wine_if(!EqualRect(&clip_rect, &virtual_rect))
         ok(EqualRect(&clip_rect, &virtual_rect), "Adapter %u: Expect clip rect %s, got %s.\n",
                 adapter_idx, wine_dbgstr_rect(&virtual_rect), wine_dbgstr_rect(&clip_rect));
 
@@ -13844,7 +13843,6 @@ static void test_cursor_clipping(void)
         get_virtual_rect(&virtual_rect);
         ok(GetClipCursor(&clip_rect), "Adapter %u: GetClipCursor failed, error %#x.\n", adapter_idx,
                 GetLastError());
-        todo_wine_if(!EqualRect(&clip_rect, &virtual_rect))
         ok(EqualRect(&clip_rect, &virtual_rect), "Adapter %u: Expect clip rect %s, got %s.\n",
                 adapter_idx, wine_dbgstr_rect(&virtual_rect), wine_dbgstr_rect(&clip_rect));
     }
