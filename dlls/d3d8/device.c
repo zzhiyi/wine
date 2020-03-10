@@ -3644,7 +3644,9 @@ HRESULT device_init(struct d3d8_device *device, struct d3d8 *parent, struct wine
 {
     struct wined3d_swapchain_desc swapchain_desc;
     struct wined3d_swapchain *wined3d_swapchain;
+    struct wined3d_adapter *wined3d_adapter;
     struct d3d8_swapchain *d3d_swapchain;
+    unsigned int output_idx;
     HRESULT hr;
 
     static const enum wined3d_feature_level feature_levels[] =
@@ -3654,6 +3656,10 @@ HRESULT device_init(struct d3d8_device *device, struct d3d8 *parent, struct wine
         WINED3D_FEATURE_LEVEL_6,
         WINED3D_FEATURE_LEVEL_5,
     };
+
+    output_idx = adapter;
+    if (output_idx >= parent->wined3d_output_count)
+        return D3DERR_INVALIDCALL;
 
     device->IDirect3DDevice8_iface.lpVtbl = &d3d8_device_vtbl;
     device->device_parent.ops = &d3d8_wined3d_device_parent_ops;
@@ -3669,7 +3675,8 @@ HRESULT device_init(struct d3d8_device *device, struct d3d8 *parent, struct wine
     if (!(flags & D3DCREATE_FPU_PRESERVE)) setup_fpu();
 
     wined3d_mutex_lock();
-    if (FAILED(hr = wined3d_device_create(wined3d, adapter, device_type,
+    wined3d_adapter = wined3d_output_get_adapter(parent->wined3d_outputs[output_idx]);
+    if (FAILED(hr = wined3d_device_create(wined3d, wined3d_adapter, device_type,
             focus_window, flags, 4, feature_levels, ARRAY_SIZE(feature_levels),
             &device->device_parent, &device->wined3d_device)))
     {
