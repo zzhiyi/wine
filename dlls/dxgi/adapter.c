@@ -163,7 +163,7 @@ static HRESULT dxgi_adapter_get_desc(struct dxgi_adapter *adapter, DXGI_ADAPTER_
     adapter_id.description_size = sizeof(description);
     adapter_id.device_name_size = 0;
 
-    if (FAILED(hr = wined3d_get_adapter_identifier(adapter->factory->wined3d, adapter->ordinal, 0, &adapter_id)))
+    if (FAILED(hr = wined3d_adapter_get_identifier(adapter->wined3d_adapter, 0, &adapter_id)))
         return hr;
 
     {
@@ -253,7 +253,7 @@ static HRESULT STDMETHODCALLTYPE dxgi_adapter_CheckInterfaceSupport(IWineDXGIAda
     wined3d = adapter->factory->wined3d;
     hr = wined3d_get_device_caps(wined3d, adapter->ordinal, WINED3D_DEVICE_TYPE_HAL, &caps);
     if (SUCCEEDED(hr))
-        hr = wined3d_get_adapter_identifier(wined3d, adapter->ordinal, 0, &adapter_id);
+        hr = wined3d_adapter_get_identifier(adapter->wined3d_adapter, 0, &adapter_id);
     wined3d_mutex_unlock();
 
     if (FAILED(hr))
@@ -336,7 +336,7 @@ static HRESULT STDMETHODCALLTYPE dxgi_adapter_QueryVideoMemoryInfo(IWineDXGIAdap
     adapter_id.description_size = 0;
     adapter_id.device_name_size = 0;
 
-    if (FAILED(hr = wined3d_get_adapter_identifier(adapter->factory->wined3d, adapter->ordinal, 0, &adapter_id)))
+    if (FAILED(hr = wined3d_adapter_get_identifier(adapter->wined3d_adapter, 0, &adapter_id)))
         return hr;
 
     switch (segment_group)
@@ -407,7 +407,7 @@ static HRESULT STDMETHODCALLTYPE dxgi_adapter_get_adapter_info(IWineDXGIAdapter 
     TRACE("iface %p, info %p.\n", iface, info);
 
     memset(&adapter_id, 0, sizeof(adapter_id));
-    if (SUCCEEDED(hr = wined3d_get_adapter_identifier(adapter->factory->wined3d, adapter->ordinal, 0, &adapter_id)))
+    if (SUCCEEDED(hr = wined3d_adapter_get_identifier(adapter->wined3d_adapter, 0, &adapter_id)))
     {
         info->driver_uuid = adapter_id.driver_uuid;
         info->device_uuid = adapter_id.device_uuid;
