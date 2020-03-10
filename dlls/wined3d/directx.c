@@ -1374,24 +1374,17 @@ static BOOL WINAPI load_dxvk_config(INIT_ONCE *once, void *param, void **context
     return TRUE;
 }
 
-HRESULT CDECL wined3d_get_adapter_identifier(const struct wined3d *wined3d,
-        UINT adapter_idx, DWORD flags, struct wined3d_adapter_identifier *identifier)
+HRESULT CDECL wined3d_adapter_get_identifier(const struct wined3d_adapter *adapter,
+        DWORD flags, struct wined3d_adapter_identifier *identifier)
 {
-    const struct wined3d_adapter *adapter;
     static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
     struct DXVKOptions dxvk_opts;
 
-    TRACE("wined3d %p, adapter_idx %u, flags %#x, identifier %p.\n",
-            wined3d, adapter_idx, flags, identifier);
+    TRACE("adapter %p, flags %#x, identifier %p.\n", adapter, flags, identifier);
 
     InitOnceExecuteOnce(&init_once, load_dxvk_config, NULL, NULL);
 
     wined3d_mutex_lock();
-
-    if (adapter_idx >= wined3d->adapter_count)
-        goto fail;
-
-    adapter = wined3d->adapters[adapter_idx];
 
     wined3d_copy_name(identifier->driver, adapter->driver_info.name, identifier->driver_size);
     wined3d_copy_name(identifier->description, adapter->driver_info.description, identifier->description_size);
