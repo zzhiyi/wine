@@ -58,11 +58,9 @@ static const struct fs_mode {
     /* this table should provide a few resolution options for common display
      * ratios, so users can choose to render at lower resolution for
      * performance. */
-    { 640,  480}, /*  4:3 */
     { 800,  600}, /*  4:3 */
     {1024,  768}, /*  4:3 */
     {1600, 1200}, /*  4:3 */
-    { 960,  540}, /* 16:9 */
     {1280,  720}, /* 16:9 */
     {1600,  900}, /* 16:9 */
     {1920, 1080}, /* 16:9 */
@@ -127,6 +125,9 @@ BOOL X11DRV_Settings_AddOneMode(unsigned int width, unsigned int height, unsigne
         return FALSE;
     }
     if (bpp == 0) bpp = dwBpp;
+
+    if (height < 600)
+        return FALSE;
 
     for(i = 0; i < dd_mode_count; ++i)
     {
