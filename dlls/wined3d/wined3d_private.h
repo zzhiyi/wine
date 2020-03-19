@@ -2855,6 +2855,7 @@ struct wined3d_adapter_ops
 
 struct wined3d_output
 {
+    unsigned int ordinal;
     WCHAR device_name[CCHDEVICENAME];
     struct wined3d_adapter *adapter;
     enum wined3d_format_id screen_format;
