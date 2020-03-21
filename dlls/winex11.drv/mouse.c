@@ -642,11 +642,9 @@ BOOL clip_fullscreen_window( HWND hwnd, BOOL reset )
         if (GetTickCount() - thread_data->clip_reset < 1000) return FALSE;
         if (clipping_cursor && thread_data->clip_hwnd) return FALSE;  /* already clipping */
     }
-    rect = get_primary_monitor_rect();
+    rect = get_virtual_screen_rect();
     if (!grab_fullscreen)
     {
-        RECT virtual_rect = get_virtual_screen_rect();
-        if (!EqualRect( &rect, &virtual_rect )) return FALSE;
         if (is_virtual_desktop()) return FALSE;
     }
     TRACE( "win %p clipping fullscreen\n", hwnd );
