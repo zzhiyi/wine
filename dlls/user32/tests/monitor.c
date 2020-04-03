@@ -760,18 +760,19 @@ static void test_ChangeDisplaySettingsEx(void)
         if (res)
         {
             /* Test position conflict */
-            dm2.dmPosition.x = dm.dmPosition.x;
+            dm2.dmPosition.x = dm.dmPosition.x + dm.dmPelsWidth - 1;
             dm2.dmPosition.y = dm.dmPosition.y;
             res = ChangeDisplaySettingsExA(devices[1].name, &dm2, NULL, CDS_RESET, NULL);
             ok(res == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsExA %s returned unexpected %d\n", devices[1].name, res);
 
-            /* Position is not changed even if ChangeDisplaySettingsExA returned DISP_CHANGE_SUCCESSFUL */
+            /* Position is changed and automatically moved */
             memset(&dm2, 0, sizeof(dm2));
             dm2.dmSize = sizeof(dm2);
             res = EnumDisplaySettingsA(devices[1].name, ENUM_CURRENT_SETTINGS, &dm2);
             /* After many resolution changes, EnumDisplaySettingsA may fail on win10 TestBot */
             ok(res || broken(!res), "EnumDisplaySettingsA %s failed, error %#x\n", devices[1].name, GetLastError());
-            todo_wine ok(dm2.dmPosition.x != dm.dmPosition.x || broken(!res), "Expect position change not applied.\n");
+            todo_wine ok((dm2.dmPosition.x == dm.dmPosition.x + dm.dmPelsWidth) || broken(!res),
+               "Expect dmPosition.x %d, got %d.\n", dm.dmPosition.x + dm.dmPelsWidth, dm2.dmPosition.x);
 
             /* Test position with extra space. The extra space will be removed */
             dm2.dmPosition.x = dm.dmPosition.x - dm2.dmPelsWidth - dm2.dmPelsWidth / 2;
