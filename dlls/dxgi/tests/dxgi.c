@@ -1522,8 +1522,8 @@ static void test_create_swapchain(void)
         return;
     }
 
-    creation_desc.BufferDesc.Width = 800;
-    creation_desc.BufferDesc.Height = 600;
+    creation_desc.BufferDesc.Width = 1024;
+    creation_desc.BufferDesc.Height = 768;
     creation_desc.BufferDesc.RefreshRate.Numerator = 60;
     creation_desc.BufferDesc.RefreshRate.Denominator = 60;
     creation_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -2222,7 +2222,7 @@ static void test_swapchain_fullscreen_state(IDXGISwapChain *swapchain,
 
     expected_state = *initial_state;
     compute_expected_swapchain_fullscreen_state_after_fullscreen_change(&expected_state,
-            &swapchain_desc, &initial_state->fullscreen_state.monitor_rect, 800, 600, NULL);
+            &swapchain_desc, &initial_state->fullscreen_state.monitor_rect, 1024, 768, NULL);
     hr = IDXGISwapChain_GetContainingOutput(swapchain, &expected_state.target);
     ok(SUCCEEDED(hr), "GetContainingOutput failed, hr %#x.\n", hr);
 
@@ -2291,7 +2291,7 @@ static void test_swapchain_fullscreen_state(IDXGISwapChain *swapchain,
         expected_state.fullscreen_state.monitor = output_desc.Monitor;
         expected_state.fullscreen_state.monitor_rect = orig_monitor_rect;
         compute_expected_swapchain_fullscreen_state_after_fullscreen_change(&expected_state,
-                &swapchain_desc, &orig_monitor_rect, 800, 600, NULL);
+                &swapchain_desc, &orig_monitor_rect, 1024, 768, NULL);
 
         hr = IDXGISwapChain_SetFullscreenState(swapchain, TRUE, output);
         ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
@@ -2375,8 +2375,8 @@ static void test_set_fullscreen(IUnknown *device, BOOL is_d3d12)
 
     get_factory(device, is_d3d12, &factory);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -2786,8 +2786,8 @@ static void test_resize_target(IUnknown *device, BOOL is_d3d12)
 
     get_factory(device, is_d3d12, &factory);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -2826,7 +2826,7 @@ static void test_resize_target(IUnknown *device, BOOL is_d3d12)
         {
             expected_state.fullscreen = TRUE;
             compute_expected_swapchain_fullscreen_state_after_fullscreen_change(&expected_state,
-                    &swapchain_desc, &initial_state.fullscreen_state.monitor_rect, 800, 600, NULL);
+                    &swapchain_desc, &initial_state.fullscreen_state.monitor_rect, 1024, 768, NULL);
             hr = IDXGISwapChain_GetContainingOutput(swapchain, &expected_state.target);
             ok(SUCCEEDED(hr) || broken(hr == DXGI_ERROR_UNSUPPORTED) /* Win 7 testbot */,
                     "GetContainingOutput failed, hr %#x.\n", hr);
@@ -2896,8 +2896,8 @@ static LRESULT CALLBACK resize_target_wndproc(HWND hwnd, unsigned int message, W
             ok(!!swapchain, "GWLP_USERDATA is NULL.\n");
             hr = IDXGISwapChain_GetDesc(swapchain, &desc);
             ok(hr == S_OK, "Failed to get desc, hr %#x.\n", hr);
-            ok(desc.BufferDesc.Width == 800, "Got unexpected buffer width %u.\n", desc.BufferDesc.Width);
-            ok(desc.BufferDesc.Height == 600, "Got unexpected buffer height %u.\n", desc.BufferDesc.Height);
+            ok(desc.BufferDesc.Width == 1024, "Got unexpected buffer width %u.\n", desc.BufferDesc.Width);
+            ok(desc.BufferDesc.Height == 768, "Got unexpected buffer height %u.\n", desc.BufferDesc.Height);
             return 0;
 
         default:
@@ -2987,8 +2987,8 @@ static void test_resize_target_wndproc(void)
     hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
     ok(hr == S_OK, "Failed to get parent, hr %#x.\n", hr);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -3016,9 +3016,9 @@ static void test_resize_target_wndproc(void)
 
     hr = IDXGISwapChain_GetDesc(swapchain, &swapchain_desc);
     ok(hr == S_OK, "Getswapchain_desc failed, hr %#x.\n", hr);
-    ok(swapchain_desc.BufferDesc.Width == 800,
+    ok(swapchain_desc.BufferDesc.Width == 1024,
             "Got unexpected buffer width %u.\n", swapchain_desc.BufferDesc.Width);
-    ok(swapchain_desc.BufferDesc.Height == 600,
+    ok(swapchain_desc.BufferDesc.Height == 768,
             "Got unexpected buffer height %u.\n", swapchain_desc.BufferDesc.Height);
 
     ret = GetClientRect(swapchain_desc.OutputWindow, &rect);
@@ -3080,8 +3080,8 @@ static void test_inexact_modes(void)
     hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
     ok(SUCCEEDED(hr), "GetParent failed, hr %#x.\n", hr);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -3180,8 +3180,8 @@ static void test_inexact_modes(void)
         ok(!refcount, "IDXGISwapChain has %u references left.\n", refcount);
 
         /* Test ResizeTarget(). */
-        swapchain_desc.BufferDesc.Width = 800;
-        swapchain_desc.BufferDesc.Height = 600;
+        swapchain_desc.BufferDesc.Width = 1024;
+        swapchain_desc.BufferDesc.Height = 768;
         swapchain_desc.Windowed = TRUE;
 
         hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
@@ -3198,8 +3198,8 @@ static void test_inexact_modes(void)
         check_swapchain_fullscreen_state(swapchain, &expected_state);
         hr = IDXGISwapChain_GetDesc(swapchain, &result_desc);
         ok(SUCCEEDED(hr), "GetDesc failed, hr %#x.\n", hr);
-        ok(result_desc.BufferDesc.Width == 800, "Got width %u.\n", result_desc.BufferDesc.Width);
-        ok(result_desc.BufferDesc.Height == 600, "Got height %u.\n", result_desc.BufferDesc.Height);
+        ok(result_desc.BufferDesc.Width == 1024, "Got width %u.\n", result_desc.BufferDesc.Width);
+        ok(result_desc.BufferDesc.Height == 768, "Got height %u.\n", result_desc.BufferDesc.Height);
 
         hr = IDXGISwapChain_SetFullscreenState(swapchain, FALSE, NULL);
         ok(SUCCEEDED(hr), "SetFullscreenState failed, hr %#x.\n", hr);
@@ -4179,8 +4179,8 @@ static void test_swapchain_present(IUnknown *device, BOOL is_d3d12)
 
     get_factory(device, is_d3d12, &factory);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -5266,8 +5266,8 @@ static void test_swapchain_window_messages(void)
     ok(hr == S_OK, "Failed to get parent, hr %#x.\n", hr);
     IDXGIAdapter_Release(adapter);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -5293,8 +5293,8 @@ static void test_swapchain_window_messages(void)
     /* resize target */
     expect_messages = resize_target_messages;
     memset(&mode_desc, 0, sizeof(mode_desc));
-    mode_desc.Width = 800;
-    mode_desc.Height = 600;
+    mode_desc.Width = 1024;
+    mode_desc.Height = 768;
     hr = IDXGISwapChain_ResizeTarget(swapchain, &mode_desc);
     ok(hr == S_OK, "Failed to resize target, hr %#x.\n", hr);
     flush_events();
@@ -5427,8 +5427,8 @@ static void test_swapchain_window_styles(void)
     ok(hr == S_OK, "Failed to get parent, hr %#x.\n", hr);
     IDXGIAdapter_Release(adapter);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 60;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -5867,8 +5867,8 @@ static void test_output_ownership(IUnknown *device, BOOL is_d3d12)
     check_ownership_desc.VidPnSourceId = open_adapter_gdi_desc.VidPnSourceId;
     wait_vidpn_exclusive_ownership(&check_ownership_desc, STATUS_SUCCESS, FALSE);
 
-    swapchain_desc.BufferDesc.Width = 800;
-    swapchain_desc.BufferDesc.Height = 600;
+    swapchain_desc.BufferDesc.Width = 1024;
+    swapchain_desc.BufferDesc.Height = 768;
     swapchain_desc.BufferDesc.RefreshRate.Numerator = 60;
     swapchain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swapchain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
