@@ -286,9 +286,7 @@ static struct wined3d_output * get_output_from_window(const struct wined3d *wine
         }
     }
 
-    /* Because wined3d only supports one output right now. A window can be on non-primary outputs
-     * and thus fails to get its correct output. In this case, return the primary output for now */
-    return &wined3d->adapters[0]->outputs[0];
+    return NULL;
 }
 
 struct wined3d_output * wined3d_swapchain_get_output(const struct wined3d_swapchain *swapchain)
