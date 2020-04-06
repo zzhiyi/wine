@@ -539,6 +539,21 @@ static XRRCrtcInfo *xrandr12_get_primary_crtc_info( XRRScreenResources *resource
     return NULL;
 }
 
+static unsigned int get_frequency( const XRRModeInfo *mode )
+{
+    unsigned int dots = mode->hTotal * mode->vTotal;
+
+    if (!dots)
+        return 0;
+
+    if (mode->modeFlags & RR_DoubleScan)
+        dots *= 2;
+    if (mode->modeFlags & RR_Interlace)
+        dots /= 2;
+
+    return (mode->dotClock + dots / 2) / dots;
+}
+
 static int xrandr12_init_modes(void)
 {
     unsigned int only_one_resolution = 1, mode_count, primary_width, primary_height;
@@ -546,7 +561,7 @@ static int xrandr12_init_modes(void)
     XRROutputInfo *output_info;
     XRRModeInfo *primary_mode = NULL;
     XRRCrtcInfo *crtc_info;
-    unsigned int primary_refresh, primary_dots;
+    unsigned int primary_refresh;
     int ret = -1;
     int i, j;
 
@@ -600,8 +615,7 @@ static int xrandr12_init_modes(void)
 
     if(primary_mode)
     {
-        primary_dots = primary_mode->hTotal * primary_mode->vTotal;
-        primary_refresh = primary_dots ? (primary_mode->dotClock + primary_dots / 2) / primary_dots : 0;
+        primary_refresh = get_frequency(primary_mode);
         primary_width = primary_mode->width;
         primary_height = primary_mode->height;
 
