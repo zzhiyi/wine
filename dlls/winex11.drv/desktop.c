@@ -324,63 +324,6 @@ BOOL CDECL X11DRV_create_desktop( UINT width, UINT height )
     return TRUE;
 }
 
-static BOOL CALLBACK update_windows_on_desktop_resize( HWND hwnd, LPARAM lparam )
-{
-    struct x11drv_win_data *data;
-    UINT mask = (UINT)lparam;
-
-    if (!(data = get_win_data( hwnd ))) return TRUE;
-
-    if (fs_hack_mapping_required() &&
-            fs_hack_matches_current_mode(
-                data->whole_rect.right - data->whole_rect.left,
-                data->whole_rect.bottom - data->whole_rect.top)){
-        if(!data->fs_hack){
-            POINT p = fs_hack_real_mode();
-            POINT tl = virtual_screen_to_root(0, 0);
-            TRACE("Enabling fs hack, resizing window %p to (%u,%u)-(%u,%u)\n", hwnd, tl.x, tl.y, p.x, p.y);
-            data->fs_hack = TRUE;
-            set_wm_hints( data );
-            XMoveResizeWindow(data->display, data->whole_window, tl.x, tl.y, p.x, p.y);
-            if(data->client_window)
-                XMoveResizeWindow(data->display, data->client_window, 0, 0, p.x, p.y);
-            sync_gl_drawable(hwnd, FALSE);
-            update_net_wm_states( data );
-        }
-    }else {
-
-        /* update the full screen state */
-        update_net_wm_states( data );
-
-        if (mask && data->whole_window)
-        {
-            POINT pos = virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
-            XWindowChanges changes;
-            changes.x = pos.x;
-            changes.y = pos.y;
-            XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
-        }
-
-        if(data->fs_hack &&
-            !fs_hack_matches_current_mode(
-                data->whole_rect.right - data->whole_rect.left,
-                data->whole_rect.bottom - data->whole_rect.top)){
-            TRACE("Disabling fs hack\n");
-            data->fs_hack = FALSE;
-            if(data->client_window){
-                XMoveResizeWindow(data->display, data->client_window,
-                        data->client_rect.left, data->client_rect.top,
-                        data->client_rect.right - data->client_rect.left,
-                        data->client_rect.bottom - data->client_rect.top);
-            }
-            sync_gl_drawable(hwnd, FALSE);
-        }
-    }
-    release_win_data( data );
-    if (hwnd == GetForegroundWindow()) clip_fullscreen_window( hwnd, TRUE );
-    return TRUE;
-}
-
 BOOL is_desktop_fullscreen(void)
 {
     RECT primary_rect = get_primary_monitor_rect();
@@ -424,7 +367,7 @@ static void update_desktop_fullscreen( unsigned int width, unsigned int height)
 /***********************************************************************
  *		X11DRV_resize_desktop
  */
-void X11DRV_resize_desktop( UINT mask, BOOL send_display_change )
+void X11DRV_resize_desktop( BOOL send_display_change )
 {
     RECT primary_rect, virtual_rect;
     HWND hwnd = GetDesktopWindow();
@@ -437,7 +380,7 @@ void X11DRV_resize_desktop( UINT mask, BOOL send_display_change )
 
     if (GetWindowThreadProcessId( hwnd, NULL ) != GetCurrentThreadId())
     {
-        SendMessageW( hwnd, WM_X11DRV_RESIZE_DESKTOP, (WPARAM)mask, (LPARAM)send_display_change );
+        SendMessageW( hwnd, WM_X11DRV_RESIZE_DESKTOP, 0, (LPARAM)send_display_change );
     }
     else
     {
@@ -453,6 +396,4 @@ void X11DRV_resize_desktop( UINT mask, BOOL send_display_change )
                                  SMTO_ABORTIFHUNG, 2000, NULL );
         }
     }
-
-    EnumWindows( update_windows_on_desktop_resize, (LPARAM)mask );
 }
