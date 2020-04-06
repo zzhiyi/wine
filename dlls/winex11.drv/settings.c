@@ -434,10 +434,6 @@ static LONG X11DRV_nores_SetCurrentMode(int mode)
         offs_x = offs_y = 0;
         fs_width = dd_modes[currentMode].width;
         fs_height = dd_modes[currentMode].height;
-
-        X11DRV_resize_desktop(
-                DisplayWidth(gdi_display, default_visual.screen),
-                DisplayHeight(gdi_display, default_visual.screen));
     }else{
         double w = dd_modes[currentMode].width;
         double h = dd_modes[currentMode].height;
@@ -475,12 +471,9 @@ static LONG X11DRV_nores_SetCurrentMode(int mode)
         fs_hack_user_to_real_h = h / (double)dd_modes[currentMode].height;
         fs_hack_real_to_user_w = dd_modes[currentMode].width / (double)w;
         fs_hack_real_to_user_h = dd_modes[currentMode].height / (double)h;
-
-        X11DRV_resize_desktop(
-                DisplayWidth(gdi_display, default_visual.screen) - (dd_modes[realMode].width - w),
-                DisplayHeight(gdi_display, default_visual.screen) - (dd_modes[realMode].height - h));
     }
 
+    X11DRV_DisplayDevices_Update(TRUE);
     return DISP_CHANGE_SUCCESSFUL;
 }
 
