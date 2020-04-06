@@ -562,6 +562,9 @@ static HRESULT ddraw_attach_d3d_device(struct ddraw *ddraw, HWND window,
         return hr;
     }
 
+    if (!windowed && window && window != GetDesktopWindow())
+        MoveWindow(window, 0, 0, mode.width, mode.height, TRUE);
+
     memset(&swapchain_desc, 0, sizeof(swapchain_desc));
     swapchain_desc.backbuffer_width = mode.width;
     swapchain_desc.backbuffer_height = mode.height;
