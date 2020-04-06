@@ -644,6 +644,41 @@ BOOL get_primary_adapter(WCHAR *name)
     return FALSE;
 }
 
+/* Initialize display device registry settings when new devices are added.
+ * This function should only be called in the desktop thread */
+void init_display_registry_settings(void)
+{
+    DISPLAY_DEVICEW dd;
+    DEVMODEW dm;
+    DWORD i = 0;
+
+    dd.cb = sizeof(dd);
+    dm.dmSize = sizeof(dm);
+    while (EnumDisplayDevicesW(NULL, i++, &dd, 0))
+    {
+        /* Skip if the device already has registry settings */
+        if (EnumDisplaySettingsExW(dd.DeviceName, ENUM_REGISTRY_SETTINGS, &dm, 0))
+            continue;
+
+        if (!EnumDisplaySettingsExW(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm, 0))
+        {
+            ERR("Failed to query current settings for %s\n", wine_dbgstr_w(dd.DeviceName));
+            continue;
+        }
+
+        TRACE("Device %s current display mode %ux%u %uBits %uHz at %d,%d\n",
+              wine_dbgstr_w(dd.DeviceName), dm.dmPelsWidth, dm.dmPelsHeight, dm.dmBitsPerPel,
+              dm.dmDisplayFrequency, dm.u1.s2.dmPosition.x, dm.u1.s2.dmPosition.y);
+
+        if (ChangeDisplaySettingsExW(dd.DeviceName, &dm, 0,
+                                     CDS_GLOBAL | CDS_NORESET | CDS_UPDATEREGISTRY, 0))
+        {
+            ERR("Failed to save registry settings for %s\n", wine_dbgstr_w(dd.DeviceName));
+            continue;
+        }
+    }
+}
+
 /***********************************************************************
  *		EnumDisplaySettingsEx  (X11DRV.@)
  *
