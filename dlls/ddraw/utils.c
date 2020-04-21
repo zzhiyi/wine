@@ -1204,8 +1204,11 @@ hr_ddraw_from_wined3d(HRESULT hr)
 {
     switch(hr)
     {
-        case WINED3DERR_INVALIDCALL: return DDERR_INVALIDPARAMS;
-        default: return hr;
+        case WINED3DERR_INVALIDCALL:        return DDERR_INVALIDPARAMS;
+        case WINED3DERR_NOTAVAILABLE:       return DDERR_UNSUPPORTED;
+        case WINEDDERR_NOTAOVERLAYSURFACE:  return DDERR_NOTAOVERLAYSURFACE;
+        case WINEDDERR_OVERLAYNOTVISIBLE:   return DDERR_OVERLAYNOTVISIBLE;
+        default:                            return hr;
     }
 }
 
