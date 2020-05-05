@@ -982,7 +982,6 @@ static PFN_vkGetInstanceProcAddr load_vulkan(void **vulkan_handle)
 
 static PFN_vkd3d_acquire_vk_queue vkd3d_acquire_vk_queue;
 static PFN_vkd3d_create_image_resource vkd3d_create_image_resource;
-static PFN_vkd3d_get_device_parent vkd3d_get_device_parent;
 static PFN_vkd3d_get_vk_device vkd3d_get_vk_device;
 static PFN_vkd3d_get_vk_format vkd3d_get_vk_format;
 static PFN_vkd3d_get_vk_physical_device vkd3d_get_vk_physical_device;
@@ -2800,7 +2799,6 @@ static BOOL load_vkd3d_functions(void *vkd3d_handle)
 #define LOAD_FUNCPTR(f) if (!(f = get_library_proc(vkd3d_handle, #f))) return FALSE;
     LOAD_FUNCPTR(vkd3d_acquire_vk_queue)
     LOAD_FUNCPTR(vkd3d_create_image_resource)
-    LOAD_FUNCPTR(vkd3d_get_device_parent)
     LOAD_FUNCPTR(vkd3d_get_vk_device)
     LOAD_FUNCPTR(vkd3d_get_vk_format)
     LOAD_FUNCPTR(vkd3d_get_vk_physical_device)
@@ -2921,13 +2919,10 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
     struct wined3d_swapchain_desc wined3d_desc;
     VkWin32SurfaceCreateInfoKHR surface_desc;
     VkPhysicalDevice vk_physical_device;
-    struct dxgi_adapter *dxgi_adapter;
     VkFenceCreateInfo fence_desc;
     uint32_t queue_family_index;
     VkSurfaceKHR vk_surface;
-    IUnknown *device_parent;
     VkInstance vk_instance;
-    IDXGIAdapter *adapter;
     VkBool32 supported;
     VkDevice vk_device;
     VkFence vk_fence;
@@ -2966,16 +2961,10 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
         return DXGI_ERROR_UNSUPPORTED;
     }
 
-    device_parent = vkd3d_get_device_parent(device);
-    if (FAILED(hr = IUnknown_QueryInterface(device_parent, &IID_IDXGIAdapter, (void **)&adapter)))
-        return hr;
-    dxgi_adapter = unsafe_impl_from_IDXGIAdapter(adapter);
-    IDXGIAdapter_Release(adapter);
     if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, (IDXGIFactory *)factory, window,
             swapchain_desc, fullscreen_desc)))
         return hr;
-    if (FAILED(hr = wined3d_swapchain_state_create(&wined3d_desc, window,
-            dxgi_adapter->factory->wined3d, &swapchain->state)))
+    if (FAILED(hr = wined3d_swapchain_state_create(&wined3d_desc, window, &swapchain->state)))
         return hr;
 
     if (swapchain_desc->BufferUsage && swapchain_desc->BufferUsage != DXGI_USAGE_RENDER_TARGET_OUTPUT)
