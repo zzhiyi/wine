@@ -227,7 +227,9 @@ static BOOL read_registry_settings(const WCHAR *device_name, DEVMODEW *dm)
     dm->dmFields |= DM_DISPLAYFLAGS;
     query_value("DefaultSettings.XPanning", &dm->u1.s2.dmPosition.x);
     query_value("DefaultSettings.YPanning", &dm->u1.s2.dmPosition.y);
+    dm->dmFields |= DM_POSITION;
     query_value("DefaultSettings.Orientation", &dm->u1.s2.dmDisplayOrientation);
+    dm->dmFields |= DM_DISPLAYORIENTATION;
     query_value("DefaultSettings.FixedOutput", &dm->u1.s2.dmDisplayFixedOutput);
 
 #undef query_value
