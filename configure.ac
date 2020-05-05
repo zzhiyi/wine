@@ -43,6 +43,7 @@ AC_ARG_WITH(cups,      AS_HELP_STRING([--without-cups],[do not use CUPS]))
 AC_ARG_WITH(curses,    AS_HELP_STRING([--without-curses],[do not use (n)curses]),
             [if test "x$withval" = "xno"; then ac_cv_header_ncurses_h=no; ac_cv_header_curses_h=no; fi])
 AC_ARG_WITH(dbus,      AS_HELP_STRING([--without-dbus],[do not use DBus (dynamic device support)]))
+AC_ARG_WITH(drm,       AS_HELP_STRING([--without-drm],[do not use DRM (Direct Rendering Manager support)]))
 AC_ARG_WITH(faudio,    AS_HELP_STRING([--without-faudio],[do not use FAudio (XAudio2 support)]))
 AC_ARG_WITH(float-abi, AS_HELP_STRING([--with-float-abi=abi],[specify the ABI (soft|softfp|hard) for ARM platforms]))
 AC_ARG_WITH(fontconfig,AS_HELP_STRING([--without-fontconfig],[do not use fontconfig]))
@@ -88,6 +89,10 @@ AC_ARG_WITH(usb,       AS_HELP_STRING([--without-usb],[do not use the libusb lib
 AC_ARG_WITH(v4l2,      AS_HELP_STRING([--without-v4l2],[do not use v4l2 (video capture)]))
 AC_ARG_WITH(vkd3d,     AS_HELP_STRING([--without-vkd3d],[do not use vkd3d (Direct3D 12 support)]))
 AC_ARG_WITH(vulkan,    AS_HELP_STRING([--without-vulkan],[do not use Vulkan]))
+AC_ARG_WITH(x11-xcb,   AS_HELP_STRING([--without-x11-xcb],[do not use Xlib XCB support]),
+            [if test "x$withval" = "xno"; then ac_cv_header_X11_Xlib_xcb_h=no; fi])
+AC_ARG_WITH(xcb-dri3,  AS_HELP_STRING([--without-xcb-dri3],[do not use XCB DRI3 support]),
+            [if test "x$withval" = "xno"; then ac_cv_header_xcb_dri3_h=no; fi])
 AC_ARG_WITH(xcomposite,AS_HELP_STRING([--without-xcomposite],[do not use the Xcomposite extension]),
             [if test "x$withval" = "xno"; then ac_cv_header_X11_extensions_Xcomposite_h=no; fi])
 AC_ARG_WITH(xcursor,   AS_HELP_STRING([--without-xcursor],[do not use the Xcursor extension]),
@@ -1145,6 +1150,7 @@ then
 
     dnl *** All of the following tests require X11/Xlib.h
     AC_CHECK_HEADERS([X11/Xlib.h \
+                      X11/Xlib-xcb.h \
                       X11/XKBlib.h \
                       X11/Xutil.h \
                       X11/Xcursor/Xcursor.h \
@@ -1255,6 +1261,48 @@ then
         fi
         WINE_NOTICE_WITH(xrandr,[test "x$ac_cv_lib_soname_Xrandr" = "x"],
                          [libxrandr ${notice_platform}development files not found, XRandr won't be supported.])
+
+        dnl *** Check for Xlib XCB
+        if test "$ac_cv_header_X11_Xlib_xcb_h" = "yes" -a "x$ac_cv_lib_soname_Xrandr" != "x"
+        then
+            AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib-xcb.h>]],
+                [[static typeof(XGetXCBConnection) * func; if (func) return 0;]])],
+                [WINE_CHECK_SONAME(X11-xcb, XGetXCBConnection,,, [$X_LIBS $X_EXTRA_LIBS])],
+                [WINE_NOTICE([libx11-xcb ${notice_platform}development files too old, Xlib XCB won't be supported.])])
+        fi
+        WINE_NOTICE_WITH(x11_xcb, [test "x$ac_cv_lib_soname_X11_xcb" = "x"],
+                         [libx11-xcb ${notice_platform}development files not found, Xlib XCB won't be supported.])
+
+        dnl *** Check for XCB DRI3
+        if test "x$ac_cv_lib_soname_X11_xcb" != "x"
+        then
+            AC_CHECK_HEADERS([xcb/dri3.h])
+            if test "$ac_cv_header_xcb_dri3_h" = "yes"
+            then
+                AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <xcb/dri3.h>]],
+                    [[static typeof(xcb_dri3_open) * func; if (func) return 0;]])],
+                    [WINE_CHECK_SONAME(xcb-dri3, xcb_dri3_open,,, [$X_LIBS $X_EXTRA_LIBS])],
+                    [WINE_NOTICE([libxcb-dri3 ${notice_platform}development files too old, XCB DRI3 won't be supported.])])
+            fi
+        fi
+        WINE_NOTICE_WITH(xcb_dri3, [test "x$ac_cv_lib_soname_xcb_dri3" = "x"],
+                         [libxcb-dri3 ${notice_platform}development files not found, XCB DRI3 won't be supported.])
+
+        dnl *** Check for libdrm
+        if test "x$with_drm" != "xno" -a "x$ac_cv_lib_soname_Xrandr" != "x"
+        then
+            WINE_PACKAGE_FLAGS(DRM, [libdrm],,,,
+                [AC_CHECK_HEADERS([xf86drm.h])
+                if test "$ac_cv_header_xf86drm_h" = "yes"
+                then
+                    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <xf86drm.h>]],
+                        [[static typeof(drmGetDevice) * func; if (func) return 0;]])],
+                        [WINE_CHECK_SONAME(drm, drmGetDevice,,, [$DRM_LIBS])],
+                        [WINE_NOTICE([libdrm ${notice_platform}development files too old, DRM may not work.])])
+                fi])
+        fi
+        WINE_NOTICE_WITH(drm, [test "x$ac_cv_lib_soname_drm" = "x"],
+                        [libdrm ${notice_platform}development files not found, DRM won't be supported.])
 
         dnl *** Check for Xfixes extension
         if test "$ac_cv_header_X11_extensions_Xfixes_h" = "yes"
