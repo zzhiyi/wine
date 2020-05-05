@@ -2818,6 +2818,40 @@ static struct wined3d_adapter *wined3d_adapter_no3d_create(unsigned int ordinal,
     return adapter;
 }
 
+static BOOL wined3d_adapter_init_luid(struct wined3d_adapter *adapter)
+{
+    D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open_adapter_param;
+    D3DKMT_CLOSEADAPTER close_adapter_param;
+    DISPLAY_DEVICEW display_device;
+    DWORD device_index = 0;
+    NTSTATUS status;
+
+    /* LUID is already initialised by OpenGL/Vulkan */
+    if (adapter->luid.LowPart || adapter->luid.HighPart)
+        return TRUE;
+
+    /* Only the primary adapter is supported */
+    if (adapter->ordinal)
+        return FALSE;
+
+    display_device.cb = sizeof(display_device);
+    while (EnumDisplayDevicesW(NULL, device_index++, &display_device, 0))
+    {
+        if (display_device.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)
+            break;
+    }
+
+    lstrcpyW(open_adapter_param.DeviceName, display_device.DeviceName);
+    status = D3DKMTOpenAdapterFromGdiDisplayName(&open_adapter_param);
+    if (status != STATUS_SUCCESS)
+        return FALSE;
+
+    adapter->luid = open_adapter_param.AdapterLuid;
+    close_adapter_param.hAdapter = open_adapter_param.hAdapter;
+    D3DKMTCloseAdapter(&close_adapter_param);
+    return TRUE;
+}
+
 BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
         const struct wined3d_adapter_ops *adapter_ops)
 {
@@ -2829,11 +2863,14 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
     adapter->ordinal = ordinal;
     adapter->output_count = 0;
 
-    /* HACK: Use ordinal instead of allocating a new LUID for every wined3d instance */
-    adapter->luid.HighPart = 0;
-    adapter->luid.LowPart = ordinal;
-    TRACE("Allocated LUID %08x:%08x for adapter %p.\n",
-            adapter->luid.HighPart, adapter->luid.LowPart, adapter);
+    if (!wined3d_adapter_init_luid(adapter))
+    {
+        /* HACK: Use ordinal instead of allocating a new LUID for every wined3d instance */
+        adapter->luid.HighPart = 0;
+        adapter->luid.LowPart = ordinal;
+    }
+    TRACE("Set LUID %08x:%08x for adapter %u %p.\n", adapter->luid.HighPart, adapter->luid.LowPart,
+            adapter->ordinal, adapter);
 
     display_device.cb = sizeof(display_device);
     while (EnumDisplayDevicesW(NULL, output_idx++, &display_device, 0))
