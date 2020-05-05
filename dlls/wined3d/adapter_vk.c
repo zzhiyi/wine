@@ -1879,6 +1879,12 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
 
     memcpy(&adapter->driver_uuid, id_properties.driverUUID, sizeof(adapter->driver_uuid));
     memcpy(&adapter->device_uuid, id_properties.deviceUUID, sizeof(adapter->device_uuid));
+    if (id_properties.deviceLUIDValid == VK_TRUE)
+    {
+        memcpy(&adapter->luid, id_properties.deviceLUID, sizeof(adapter->luid));
+        TRACE("Set LUID to %08x:%08x for adapter %p.\n", adapter->luid.HighPart,
+                adapter->luid.LowPart, adapter);
+    }
 
     if (!wined3d_adapter_vk_init_format_info(adapter_vk, vk_info))
         goto fail_vulkan;
