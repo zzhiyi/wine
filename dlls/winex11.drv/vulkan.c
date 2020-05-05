@@ -84,6 +84,8 @@ static VkResult (*pvkGetDeviceGroupSurfacePresentModesKHR)(VkDevice, VkSurfaceKH
 static void * (*pvkGetDeviceProcAddr)(VkDevice, const char *);
 static void * (*pvkGetInstanceProcAddr)(VkInstance, const char *);
 static VkResult (*pvkGetPhysicalDevicePresentRectanglesKHR)(VkPhysicalDevice, VkSurfaceKHR, uint32_t *, VkRect2D *);
+static void (*pvkGetPhysicalDeviceProperties2)(VkPhysicalDevice, VkPhysicalDeviceProperties2 *);
+static void (*pvkGetPhysicalDeviceProperties2KHR)(VkPhysicalDevice, VkPhysicalDeviceProperties2 *);
 static VkResult (*pvkGetPhysicalDeviceSurfaceCapabilities2KHR)(VkPhysicalDevice, const VkPhysicalDeviceSurfaceInfo2KHR *, VkSurfaceCapabilities2KHR *);
 static VkResult (*pvkGetPhysicalDeviceSurfaceCapabilitiesKHR)(VkPhysicalDevice, VkSurfaceKHR, VkSurfaceCapabilitiesKHR *);
 static VkResult (*pvkGetPhysicalDeviceSurfaceFormats2KHR)(VkPhysicalDevice, const VkPhysicalDeviceSurfaceInfo2KHR *, uint32_t *, VkSurfaceFormat2KHR *);
@@ -123,6 +125,8 @@ static BOOL WINAPI wine_vk_init(INIT_ONCE *once, void *param, void **context)
     LOAD_FUNCPTR(vkEnumerateInstanceExtensionProperties);
     LOAD_FUNCPTR(vkGetDeviceProcAddr);
     LOAD_FUNCPTR(vkGetInstanceProcAddr);
+    LOAD_FUNCPTR(vkGetPhysicalDeviceProperties2);
+    LOAD_OPTIONAL_FUNCPTR(vkGetPhysicalDeviceProperties2KHR);
     LOAD_OPTIONAL_FUNCPTR(vkGetPhysicalDeviceSurfaceCapabilities2KHR);
     LOAD_FUNCPTR(vkGetPhysicalDeviceSurfaceCapabilitiesKHR);
     LOAD_OPTIONAL_FUNCPTR(vkGetPhysicalDeviceSurfaceFormats2KHR);
@@ -459,6 +463,25 @@ static VkResult X11DRV_vkGetPhysicalDevicePresentRectanglesKHR(VkPhysicalDevice 
     return pvkGetPhysicalDevicePresentRectanglesKHR(phys_dev, x11_surface->surface, count, rects);
 }
 
+static void X11DRV_vkGetPhysicalDeviceProperties2(VkPhysicalDevice phys_dev,
+        VkPhysicalDeviceProperties2 *properties)
+{
+    TRACE("%p, %p\n", phys_dev, properties);
+
+    pvkGetPhysicalDeviceProperties2(phys_dev, properties);
+}
+
+static void X11DRV_vkGetPhysicalDeviceProperties2KHR(VkPhysicalDevice phys_dev,
+        VkPhysicalDeviceProperties2 *properties)
+{
+    TRACE("%p, %p\n", phys_dev, properties);
+
+    if (pvkGetPhysicalDeviceProperties2KHR)
+        pvkGetPhysicalDeviceProperties2KHR(phys_dev, properties);
+    else
+        pvkGetPhysicalDeviceProperties2(phys_dev, properties);
+}
+
 static VkResult X11DRV_vkGetPhysicalDeviceSurfaceCapabilities2KHR(VkPhysicalDevice phys_dev,
         const VkPhysicalDeviceSurfaceInfo2KHR *surface_info, VkSurfaceCapabilities2KHR *capabilities)
 {
@@ -603,26 +626,28 @@ static VkResult X11DRV_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *
 
 static const struct vulkan_funcs vulkan_funcs =
 {
-    X11DRV_vkCreateInstance,
-    X11DRV_vkCreateSwapchainKHR,
-    X11DRV_vkCreateWin32SurfaceKHR,
-    X11DRV_vkDestroyInstance,
-    X11DRV_vkDestroySurfaceKHR,
-    X11DRV_vkDestroySwapchainKHR,
-    X11DRV_vkEnumerateInstanceExtensionProperties,
-    X11DRV_vkGetDeviceGroupSurfacePresentModesKHR,
-    X11DRV_vkGetDeviceProcAddr,
-    X11DRV_vkGetInstanceProcAddr,
-    X11DRV_vkGetPhysicalDevicePresentRectanglesKHR,
-    X11DRV_vkGetPhysicalDeviceSurfaceCapabilities2KHR,
-    X11DRV_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
-    X11DRV_vkGetPhysicalDeviceSurfaceFormats2KHR,
-    X11DRV_vkGetPhysicalDeviceSurfaceFormatsKHR,
-    X11DRV_vkGetPhysicalDeviceSurfacePresentModesKHR,
-    X11DRV_vkGetPhysicalDeviceSurfaceSupportKHR,
-    X11DRV_vkGetPhysicalDeviceWin32PresentationSupportKHR,
-    X11DRV_vkGetSwapchainImagesKHR,
-    X11DRV_vkQueuePresentKHR,
+    .p_vkCreateInstance = X11DRV_vkCreateInstance,
+    .p_vkCreateSwapchainKHR = X11DRV_vkCreateSwapchainKHR,
+    .p_vkCreateWin32SurfaceKHR = X11DRV_vkCreateWin32SurfaceKHR,
+    .p_vkDestroyInstance = X11DRV_vkDestroyInstance,
+    .p_vkDestroySurfaceKHR = X11DRV_vkDestroySurfaceKHR,
+    .p_vkDestroySwapchainKHR = X11DRV_vkDestroySwapchainKHR,
+    .p_vkEnumerateInstanceExtensionProperties = X11DRV_vkEnumerateInstanceExtensionProperties,
+    .p_vkGetDeviceGroupSurfacePresentModesKHR = X11DRV_vkGetDeviceGroupSurfacePresentModesKHR,
+    .p_vkGetDeviceProcAddr = X11DRV_vkGetDeviceProcAddr,
+    .p_vkGetInstanceProcAddr = X11DRV_vkGetInstanceProcAddr,
+    .p_vkGetPhysicalDevicePresentRectanglesKHR = X11DRV_vkGetPhysicalDevicePresentRectanglesKHR,
+    .p_vkGetPhysicalDeviceProperties2 = X11DRV_vkGetPhysicalDeviceProperties2,
+    .p_vkGetPhysicalDeviceProperties2KHR = X11DRV_vkGetPhysicalDeviceProperties2KHR,
+    .p_vkGetPhysicalDeviceSurfaceCapabilities2KHR = X11DRV_vkGetPhysicalDeviceSurfaceCapabilities2KHR,
+    .p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR = X11DRV_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
+    .p_vkGetPhysicalDeviceSurfaceFormats2KHR = X11DRV_vkGetPhysicalDeviceSurfaceFormats2KHR,
+    .p_vkGetPhysicalDeviceSurfaceFormatsKHR = X11DRV_vkGetPhysicalDeviceSurfaceFormatsKHR,
+    .p_vkGetPhysicalDeviceSurfacePresentModesKHR = X11DRV_vkGetPhysicalDeviceSurfacePresentModesKHR,
+    .p_vkGetPhysicalDeviceSurfaceSupportKHR = X11DRV_vkGetPhysicalDeviceSurfaceSupportKHR,
+    .p_vkGetPhysicalDeviceWin32PresentationSupportKHR = X11DRV_vkGetPhysicalDeviceWin32PresentationSupportKHR,
+    .p_vkGetSwapchainImagesKHR = X11DRV_vkGetSwapchainImagesKHR,
+    .p_vkQueuePresentKHR = X11DRV_vkQueuePresentKHR,
 };
 
 static void *X11DRV_get_vk_device_proc_addr(const char *name)
