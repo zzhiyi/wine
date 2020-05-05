@@ -559,9 +559,15 @@ static unsigned int wined3d_swapchain_flags_from_dxgi(unsigned int flags)
     return wined3d_flags;
 }
 
-HRESULT wined3d_swapchain_desc_from_dxgi(struct wined3d_swapchain_desc *wined3d_desc, HWND window,
-        const DXGI_SWAP_CHAIN_DESC1 *dxgi_desc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *dxgi_fullscreen_desc)
+HRESULT wined3d_swapchain_desc_from_dxgi(struct wined3d_swapchain_desc *wined3d_desc,
+        IDXGIFactory *factory, HWND window, const DXGI_SWAP_CHAIN_DESC1 *dxgi_desc,
+        const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *dxgi_fullscreen_desc)
 {
+    struct dxgi_output *dxgi_output;
+    struct IDXGIAdapter *adapter;
+    struct IDXGIOutput *output;
+    HRESULT hr;
+
     if (dxgi_desc->Scaling != DXGI_SCALING_STRETCH)
         FIXME("Ignoring scaling %#x.\n", dxgi_desc->Scaling);
     if (dxgi_desc->AlphaMode != DXGI_ALPHA_MODE_IGNORE)
@@ -590,6 +596,27 @@ HRESULT wined3d_swapchain_desc_from_dxgi(struct wined3d_swapchain_desc *wined3d_
             return DXGI_ERROR_INVALID_CALL;
     }
 
+    if (FAILED(hr = dxgi_get_output_from_window(factory, window, &output)))
+    {
+        WARN("Failed to get output from window %p, hr %#x.\n", window, hr);
+
+        /* FIXME: As wined3d only supports one output currently, even if a window is on a
+         * non-primary output, the swapchain will use the primary output. Keep this behaviour
+         * until all outputs are correctly enumerated. Otherwise it will create a regression
+         * for applications that specify a device window on a non-primary output */
+        if (FAILED(hr = IDXGIFactory_EnumAdapters(factory, 0, &adapter)))
+            return hr;
+
+        hr = IDXGIAdapter_EnumOutputs(adapter, 0, &output);
+        IDXGIAdapter_Release(adapter);
+        if (FAILED(hr))
+            return hr;
+
+        FIXME("Using the primary output for the device window that is on a non-primary output.\n");
+    }
+    dxgi_output = unsafe_impl_from_IDXGIOutput(output);
+
+    wined3d_desc->output = dxgi_output->wined3d_output;
     wined3d_desc->backbuffer_width = dxgi_desc->Width;
     wined3d_desc->backbuffer_height = dxgi_desc->Height;
     wined3d_desc->backbuffer_format = wined3dformat_from_dxgi_format(dxgi_desc->Format);
@@ -605,6 +632,7 @@ HRESULT wined3d_swapchain_desc_from_dxgi(struct wined3d_swapchain_desc *wined3d_
     wined3d_desc->refresh_rate = dxgi_fullscreen_desc ? dxgi_rational_to_uint(&dxgi_fullscreen_desc->RefreshRate) : 0;
     wined3d_desc->auto_restore_display_mode = TRUE;
 
+    IDXGIOutput_Release(output);
     return S_OK;
 }
 

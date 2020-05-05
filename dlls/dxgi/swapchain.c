@@ -111,8 +111,7 @@ BOOL dxgi_validate_swapchain_desc(const DXGI_SWAP_CHAIN_DESC1 *desc)
     return TRUE;
 }
 
-static HRESULT dxgi_get_output_from_window(IDXGIFactory *factory, HWND window,
-        IDXGIOutput **dxgi_output)
+HRESULT dxgi_get_output_from_window(IDXGIFactory *factory, HWND window, IDXGIOutput **dxgi_output)
 {
     unsigned int adapter_idx, output_idx;
     DXGI_OUTPUT_DESC desc;
@@ -2261,7 +2260,8 @@ static HRESULT STDMETHODCALLTYPE DECLSPEC_HOTPATCH d3d12_swapchain_SetFullscreen
         return hr;
     }
 
-    if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, window, swapchain_desc, fullscreen_desc)))
+    if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc,
+            (IDXGIFactory *)swapchain->factory, window, swapchain_desc, fullscreen_desc)))
         goto fail;
     wined3d_mutex_lock();
     wined3d_desc.windowed = !fullscreen;
@@ -2971,7 +2971,8 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
         return hr;
     dxgi_adapter = unsafe_impl_from_IDXGIAdapter(adapter);
     IDXGIAdapter_Release(adapter);
-    if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, window, swapchain_desc, fullscreen_desc)))
+    if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, (IDXGIFactory *)factory, window,
+            swapchain_desc, fullscreen_desc)))
         return hr;
     if (FAILED(hr = wined3d_swapchain_state_create(&wined3d_desc, window,
             dxgi_adapter->factory->wined3d, &swapchain->state)))

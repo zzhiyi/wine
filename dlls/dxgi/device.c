@@ -433,7 +433,8 @@ static HRESULT STDMETHODCALLTYPE dxgi_swapchain_factory_create_swapchain(IWineDX
     TRACE("iface %p, factory %p, window %p, desc %p, fullscreen_desc %p, output %p, swapchain %p.\n",
             iface, factory, window, desc, fullscreen_desc, output, swapchain);
 
-    if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, window, desc, fullscreen_desc)))
+    if (FAILED(hr = wined3d_swapchain_desc_from_dxgi(&wined3d_desc, factory, window, desc,
+            fullscreen_desc)))
         return hr;
 
     if (!(object = heap_alloc_zero(sizeof(*object))))
@@ -474,7 +475,10 @@ HRESULT dxgi_device_init(struct dxgi_device *device, struct dxgi_device_layer *l
     struct d3d11_swapchain *swapchain;
     struct dxgi_adapter *dxgi_adapter;
     struct dxgi_factory *dxgi_factory;
+    struct dxgi_output *dxgi_output;
+    struct IDXGIOutput *output;
     void *layer_base;
+    HWND window;
     HRESULT hr;
 
     if (!(dxgi_factory = unsafe_impl_from_IDXGIFactory(factory)))
@@ -530,11 +534,25 @@ HRESULT dxgi_device_init(struct dxgi_device *device, struct dxgi_device_layer *l
         return hr;
     }
 
+    window = dxgi_factory_get_device_window(dxgi_factory);
+    if (FAILED(hr = dxgi_get_output_from_window(factory, window, &output)))
+    {
+        ERR("Failed to get output from window %p.\n", window);
+        wined3d_device_decref(device->wined3d_device);
+        IUnknown_Release(device->child_layer);
+        wined3d_private_store_cleanup(&device->private_store);
+        wined3d_mutex_unlock();
+        return hr;
+    }
+    dxgi_output = unsafe_impl_from_IDXGIOutput(output);
+
     memset(&swapchain_desc, 0, sizeof(swapchain_desc));
     swapchain_desc.swap_effect = WINED3D_SWAP_EFFECT_DISCARD;
-    swapchain_desc.device_window = dxgi_factory_get_device_window(dxgi_factory);
+    swapchain_desc.device_window = window;
     swapchain_desc.windowed = TRUE;
     swapchain_desc.flags = WINED3D_SWAPCHAIN_IMPLICIT;
+    swapchain_desc.output = dxgi_output->wined3d_output;
+    IDXGIOutput_Release(output);
 
     if (!(swapchain = heap_alloc_zero(sizeof(*swapchain))))
     {
