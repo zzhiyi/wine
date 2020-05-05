@@ -212,7 +212,7 @@ static void test_enumerate_physical_device2(void)
             trace("Device '%s', device UUID: %s, driver UUID: %s, device LUID: %08x:%08x.\n",
                   properties2.properties.deviceName, wine_dbgstr_guid((const GUID *)id.deviceUUID),
                   wine_dbgstr_guid((const GUID *)id.driverUUID), luid->HighPart, luid->LowPart);
-            todo_wine ok(id.deviceLUIDValid == VK_TRUE, "Expected valid device LUID.\n");
+            ok(id.deviceLUIDValid == VK_TRUE, "Expected valid device LUID.\n");
         }
     }
 

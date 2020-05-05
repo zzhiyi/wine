@@ -59,6 +59,10 @@ typedef int Status;
 #include "wine/gdi_driver.h"
 #include "wine/list.h"
 
+#define VK_NO_PROTOTYPES
+#define WINE_VK_HOST
+#include "wine/vulkan.h"
+
 #define MAX_DASHLEN 16
 
 #define WINE_XDND_VERSION 5
@@ -228,6 +232,8 @@ extern const struct gdi_dc_funcs *X11DRV_XRender_Init(void) DECLSPEC_HIDDEN;
 
 extern struct opengl_funcs *get_glx_driver(UINT) DECLSPEC_HIDDEN;
 extern const struct vulkan_funcs *get_vulkan_driver(UINT) DECLSPEC_HIDDEN;
+extern BOOL fill_vk_device_luid(VkPhysicalDevice phys_dev, VkPhysicalDeviceProperties2 *properties)
+        DECLSPEC_HIDDEN;
 
 /* IME support */
 extern void IME_SetOpenStatus(BOOL fOpen) DECLSPEC_HIDDEN;
@@ -750,6 +756,8 @@ struct x11drv_gpu
     UINT device_id;
     UINT subsys_id;
     UINT revision_id;
+    /* Optional RandR provider id. If it's not supported, set to zero */
+    UINT64 randr_provider_id;
 };
 
 /* Represent an adapter in EnumDisplayDevices context */

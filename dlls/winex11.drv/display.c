@@ -41,11 +41,12 @@ WINE_DEFAULT_DEBUG_CHANNEL(x11drv);
 
 DEFINE_DEVPROPKEY(DEVPROPKEY_GPU_LUID, 0x60b193cb, 0x5276, 0x4d0f, 0x96, 0xfc, 0xf1, 0x73, 0xab, 0xad, 0x3e, 0xc6, 2);
 
-/* Wine specific monitor properties */
+/* Wine specific properties */
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCWORK, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 4);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 5);
+DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_RANDR_PROVIDER_ID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5c, 2);
 
 static const WCHAR driver_date_dataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
 static const WCHAR driver_descW[] = {'D','r','i','v','e','r','D','e','s','c',0};
@@ -353,6 +354,16 @@ static BOOL X11DRV_InitGpu(HDEVINFO devinfo, const struct x11drv_gpu *gpu, INT g
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &DEVPKEY_Device_IsPresent, DEVPROP_TYPE_BOOLEAN,
                                    (const BYTE *)&present, sizeof(present), 0))
         goto done;
+
+    /* Write WINE_DEVPROPKEY_RANDR_PROVIDER_ID property */
+    if (gpu->randr_provider_id)
+    {
+        TRACE("RandR provider id: 0x%s.\n", wine_dbgstr_longlong(gpu->randr_provider_id));
+        if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_RANDR_PROVIDER_ID,
+                                       DEVPROP_TYPE_UINT64, (const BYTE *)&gpu->randr_provider_id,
+                                       sizeof(gpu->randr_provider_id), 0))
+            goto done;
+    }
 
     /* Write DEVPROPKEY_GPU_LUID property */
     if (!SetupDiGetDevicePropertyW(devinfo, &device_data, &DEVPROPKEY_GPU_LUID, &property_type,
