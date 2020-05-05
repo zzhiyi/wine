@@ -34,10 +34,6 @@
 #include "wine/library.h"
 #include "x11drv.h"
 
-#define VK_NO_PROTOTYPES
-#define WINE_VK_HOST
-
-#include "wine/vulkan.h"
 #include "wine/vulkan_driver.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(vulkan);
@@ -165,9 +161,9 @@ fail:
  * Caller is responsible for allocation and cleanup of 'dst'.
  */
 static VkResult wine_vk_instance_convert_create_info(const VkInstanceCreateInfo *src,
-        VkInstanceCreateInfo *dst)
+        VkInstanceCreateInfo *dst, BOOL use_acquire_xlib_display)
 {
-    unsigned int i;
+    unsigned int i, extension_count;
     const char **enabled_extensions = NULL;
 
     dst->sType = src->sType;
@@ -179,9 +175,13 @@ static VkResult wine_vk_instance_convert_create_info(const VkInstanceCreateInfo 
     dst->enabledExtensionCount = 0;
     dst->ppEnabledExtensionNames = NULL;
 
-    if (src->enabledExtensionCount > 0)
+    extension_count = src->enabledExtensionCount;
+    if (use_acquire_xlib_display)
+        ++extension_count;
+
+    if (extension_count)
     {
-        enabled_extensions = heap_calloc(src->enabledExtensionCount, sizeof(*src->ppEnabledExtensionNames));
+        enabled_extensions = heap_calloc(extension_count, sizeof(*src->ppEnabledExtensionNames));
         if (!enabled_extensions)
         {
             ERR("Failed to allocate memory for enabled extensions\n");
@@ -202,8 +202,13 @@ static VkResult wine_vk_instance_convert_create_info(const VkInstanceCreateInfo 
                 enabled_extensions[i] = src->ppEnabledExtensionNames[i];
             }
         }
+
+        /* Enable VK_EXT_acquire_xlib_display for the use of vkGetRandROutputDisplayEXT() */
+        if (use_acquire_xlib_display)
+            enabled_extensions[i] = "VK_EXT_acquire_xlib_display";
+
         dst->ppEnabledExtensionNames = enabled_extensions;
-        dst->enabledExtensionCount = src->enabledExtensionCount;
+        dst->enabledExtensionCount = extension_count;
     }
 
     return VK_SUCCESS;
@@ -252,7 +257,7 @@ static VkResult X11DRV_vkCreateInstance(const VkInstanceCreateInfo *create_info,
      * performed a first pass in which it handles everything except for WSI
      * functionality such as VK_KHR_win32_surface. Handle this now.
      */
-    res = wine_vk_instance_convert_create_info(create_info, &create_info_host);
+    res = wine_vk_instance_convert_create_info(create_info, &create_info_host, TRUE);
     if (res != VK_SUCCESS)
     {
         ERR("Failed to convert instance create info, res=%d\n", res);
@@ -260,7 +265,18 @@ static VkResult X11DRV_vkCreateInstance(const VkInstanceCreateInfo *create_info,
     }
 
     res = pvkCreateInstance(&create_info_host, NULL /* allocator */, instance);
+    heap_free((void *)create_info_host.ppEnabledExtensionNames);
+    if (res != VK_ERROR_EXTENSION_NOT_PRESENT)
+        return res;
 
+    /* Retry vkCreateInstance() without VK_EXT_acquire_xlib_display */
+    res = wine_vk_instance_convert_create_info(create_info, &create_info_host, FALSE);
+    if (res != VK_SUCCESS)
+    {
+        ERR("Failed to convert instance create info, res=%d\n", res);
+        return res;
+    }
+    res = pvkCreateInstance(&create_info_host, NULL /* allocator */, instance);
     heap_free((void *)create_info_host.ppEnabledExtensionNames);
     return res;
 }
@@ -423,6 +439,14 @@ static VkResult X11DRV_vkEnumerateInstanceExtensionProperties(const char *layer_
                     VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
             properties[i].specVersion = VK_KHR_WIN32_SURFACE_SPEC_VERSION;
         }
+
+        /* Don't report VK_EXT_acquire_xlib_display */
+        if (!strcmp(properties[i].extensionName, "VK_EXT_acquire_xlib_display"))
+        {
+            if (i + 1 < *count)
+                memmove(&properties[i], &properties[i + 1], sizeof(*properties) * (*count - (i + 1)));
+            *count = *count - 1;
+        }
     }
 
     TRACE("Returning %u extensions.\n", *count);
@@ -479,6 +503,10 @@ static void X11DRV_vkGetPhysicalDeviceProperties2(VkPhysicalDevice phys_dev,
     TRACE("%p, %p\n", phys_dev, properties);
 
     pvkGetPhysicalDeviceProperties2(phys_dev, properties);
+
+#if defined(SONAME_LIBXRANDR) && defined(HAVE_XRRGETPROVIDERRESOURCES)
+    fill_vk_device_luid(phys_dev, properties);
+#endif
 }
 
 static void X11DRV_vkGetPhysicalDeviceProperties2KHR(VkPhysicalDevice phys_dev,
@@ -490,6 +518,10 @@ static void X11DRV_vkGetPhysicalDeviceProperties2KHR(VkPhysicalDevice phys_dev,
         pvkGetPhysicalDeviceProperties2KHR(phys_dev, properties);
     else
         pvkGetPhysicalDeviceProperties2(phys_dev, properties);
+
+#if defined(SONAME_LIBXRANDR) && defined(HAVE_XRRGETPROVIDERRESOURCES)
+    fill_vk_device_luid(phys_dev, properties);
+#endif
 }
 
 static VkResult X11DRV_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice phys_dev,
