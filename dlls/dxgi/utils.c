@@ -564,7 +564,6 @@ HRESULT wined3d_swapchain_desc_from_dxgi(struct wined3d_swapchain_desc *wined3d_
         const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *dxgi_fullscreen_desc)
 {
     struct dxgi_output *dxgi_output;
-    struct IDXGIAdapter *adapter;
     struct IDXGIOutput *output;
     HRESULT hr;
 
@@ -599,20 +598,7 @@ HRESULT wined3d_swapchain_desc_from_dxgi(struct wined3d_swapchain_desc *wined3d_
     if (FAILED(hr = dxgi_get_output_from_window(factory, window, &output)))
     {
         WARN("Failed to get output from window %p, hr %#x.\n", window, hr);
-
-        /* FIXME: As wined3d only supports one output currently, even if a window is on a
-         * non-primary output, the swapchain will use the primary output. Keep this behaviour
-         * until all outputs are correctly enumerated. Otherwise it will create a regression
-         * for applications that specify a device window on a non-primary output */
-        if (FAILED(hr = IDXGIFactory_EnumAdapters(factory, 0, &adapter)))
-            return hr;
-
-        hr = IDXGIAdapter_EnumOutputs(adapter, 0, &output);
-        IDXGIAdapter_Release(adapter);
-        if (FAILED(hr))
-            return hr;
-
-        FIXME("Using the primary output for the device window that is on a non-primary output.\n");
+        return hr;
     }
     dxgi_output = unsafe_impl_from_IDXGIOutput(output);
 
