@@ -3012,10 +3012,6 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
         adapter->outputs[primary_idx] = tmp;
     }
 
-    memset(&adapter->driver_uuid, 0, sizeof(adapter->driver_uuid));
-    memset(&adapter->device_uuid, 0, sizeof(adapter->device_uuid));
-
-    adapter->formats = NULL;
     adapter->adapter_ops = adapter_ops;
     ret = TRUE;
 done:

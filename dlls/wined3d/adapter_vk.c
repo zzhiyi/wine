@@ -1848,17 +1848,14 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
     TRACE("adapter_vk %p, ordinal %u, wined3d_creation_flags %#x.\n",
             adapter_vk, ordinal, wined3d_creation_flags);
 
-    if (!wined3d_adapter_init(adapter, ordinal, &wined3d_adapter_vk_ops))
-        return FALSE;
-
     if (!wined3d_init_vulkan(vk_info))
     {
         WARN("Failed to initialize Vulkan.\n");
-        goto fail;
+        return FALSE;
     }
 
     if (!(adapter_vk->physical_device = get_vulkan_physical_device(vk_info)))
-        goto fail_vulkan;
+        goto fail;
 
     memset(&id_properties, 0, sizeof(id_properties));
     id_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
@@ -1887,7 +1884,7 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
     }
 
     if (!wined3d_adapter_vk_init_format_info(adapter_vk, vk_info))
-        goto fail_vulkan;
+        goto fail;
 
     adapter->vertex_pipe = &none_vertex_pipe;
     adapter->fragment_pipe = &none_fragment_pipe;
@@ -1896,13 +1893,13 @@ static BOOL wined3d_adapter_vk_init(struct wined3d_adapter_vk *adapter_vk,
 
     wined3d_adapter_vk_init_d3d_info(adapter, wined3d_creation_flags);
 
-    return TRUE;
+    if (!wined3d_adapter_init(adapter, ordinal, &wined3d_adapter_vk_ops))
+        goto fail;
 
-fail_vulkan:
+    return TRUE;
+fail:
     VK_CALL(vkDestroyInstance(vk_info->instance, NULL));
     wined3d_unload_vulkan(vk_info);
-fail:
-    wined3d_adapter_cleanup(adapter);
     return FALSE;
 }
 
