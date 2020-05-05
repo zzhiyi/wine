@@ -6259,7 +6259,6 @@ START_TEST(dxgi)
     queue_test(test_maximum_frame_latency);
     queue_test(test_output_desc);
     queue_test(test_object_wrapping);
-    queue_test(test_multi_adapter);
     queue_test(test_factory_check_feature_support);
 
     run_queued_tests();
@@ -6269,6 +6268,7 @@ START_TEST(dxgi)
     test_default_fullscreen_target_output();
     test_inexact_modes();
     test_gamma_control();
+    test_multi_adapter();
     test_swapchain_parameters();
     test_swapchain_window_messages();
     test_swapchain_window_styles();
