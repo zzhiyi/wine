@@ -143,6 +143,7 @@ static HRESULT wined3d_output_init(struct wined3d_output *output, unsigned int o
     output->kmt_adapter = open_adapter_desc.hAdapter;
     output->kmt_device = create_device_desc.hDevice;
     output->vidpn_source_id = open_adapter_desc.VidPnSourceId;
+    output->screen_format = WINED3DFMT_UNKNOWN;
 
     return WINED3D_OK;
 }
