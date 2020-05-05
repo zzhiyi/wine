@@ -106,11 +106,6 @@ static BOOL drm_loaded;
 
 #undef MAKE_FUNCPTR
 
-static struct x11drv_mode_info *dd_modes;
-static SizeID *xrandr10_modes;
-static unsigned int xrandr_mode_count;
-static int xrandr_current_mode = -1;
-
 static int load_xrandr(void)
 {
     int r = 0;
@@ -191,157 +186,178 @@ static int XRandRErrorHandler(Display *dpy, XErrorEvent *event, void *arg)
     return 1;
 }
 
-static int xrandr10_get_current_mode(void)
+static BOOL xrandr10_get_id( const WCHAR *device_name, ULONG_PTR *id )
 {
-    SizeID size;
-    Rotation rot;
-    XRRScreenConfiguration *sc;
-    short rate;
-    unsigned int i;
-    int res = -1;
+    static const WCHAR displayW[] = {'\\','\\','.','\\','D','I','S','P','L','A','Y'};
+    WCHAR primary_adapter[CCHDEVICENAME];
+    WCHAR *end_ptr;
 
-    if (xrandr_current_mode != -1)
-        return xrandr_current_mode;
+    /* Device name has to be \\.\DISPLAY%d */
+    if (strncmpiW( device_name, displayW, ARRAY_SIZE(displayW) ))
+        return FALSE;
 
-    sc = pXRRGetScreenInfo (gdi_display, DefaultRootWindow( gdi_display ));
-    size = pXRRConfigCurrentConfiguration (sc, &rot);
-    rate = pXRRConfigCurrentRate (sc);
-    pXRRFreeScreenConfigInfo(sc);
+    strtolW( device_name + ARRAY_SIZE(displayW), &end_ptr, 10 );
+    if (*end_ptr)
+        return FALSE;
 
-    for (i = 0; i < xrandr_mode_count; ++i)
-    {
-        if (xrandr10_modes[i] == size && dd_modes[i].refresh_rate == rate)
-        {
-            res = i;
-            break;
-        }
-    }
-    if (res == -1)
-    {
-        ERR("In unknown mode, returning default\n");
-        return 0;
-    }
+    if (!get_primary_adapter( primary_adapter ))
+        return FALSE;
 
-    xrandr_current_mode = res;
-    return res;
+    /* RandR 1.0 only supports changing the primary adapter settings.
+     * For non-primary adapters, an id is still provided but getting
+     * and changing non-primary adapters' settings will be ignored. */
+    *id = !lstrcmpiW( device_name, primary_adapter ) ? 1 : 0;
+    return TRUE;
 }
 
-static LONG xrandr10_set_current_mode( int mode )
+static BOOL xrandr10_get_modes(ULONG_PTR id, DWORD flags, DEVMODEW **new_modes, INT *new_mode_count)
 {
-    SizeID size;
-    Rotation rot;
-    Window root;
-    XRRScreenConfiguration *sc;
-    Status stat;
-    short rate;
-
-    root = DefaultRootWindow( gdi_display );
-    sc = pXRRGetScreenInfo (gdi_display, root);
-    pXRRConfigCurrentConfiguration (sc, &rot);
-    mode = mode % xrandr_mode_count;
-
-    TRACE("Changing Resolution to %dx%d @%d Hz\n",
-          dd_modes[mode].width,
-          dd_modes[mode].height,
-          dd_modes[mode].refresh_rate);
-
-    size = xrandr10_modes[mode];
-    rate = dd_modes[mode].refresh_rate;
-
-    if (rate)
-        stat = pXRRSetScreenConfigAndRate( gdi_display, sc, root, size, rot, rate, CurrentTime );
-    else
-        stat = pXRRSetScreenConfig( gdi_display, sc, root, size, rot, CurrentTime );
-
-    pXRRFreeScreenConfigInfo(sc);
-
-    if (stat == RRSetConfigSuccess)
-    {
-        xrandr_current_mode = mode;
-        X11DRV_DisplayDevices_Update( TRUE );
-        return DISP_CHANGE_SUCCESSFUL;
-    }
-
-    ERR("Resolution change not successful -- perhaps display has changed?\n");
-    return DISP_CHANGE_FAILED;
-}
-
-static void xrandr10_init_modes(void)
-{
+    INT size_index, depth_index, rate_index, mode_index = 0;
+    INT size_count, rate_count, mode_count = 0;
+    DEVMODEW *modes, *mode;
     XRRScreenSize *sizes;
-    int sizes_count;
-    int i, j, nmodes = 0;
+    short *rates;
 
-    sizes = pXRRSizes( gdi_display, DefaultScreen(gdi_display), &sizes_count );
-    if (sizes_count <= 0) return;
+    sizes = pXRRSizes( gdi_display, DefaultScreen(gdi_display), &size_count );
+    if (size_count <= 0)
+        return FALSE;
 
-    TRACE("XRandR: found %d sizes.\n", sizes_count);
-    for (i = 0; i < sizes_count; ++i)
+    for (size_index = 0; size_index < size_count; ++size_index)
     {
-        int rates_count;
-        short *rates;
+        rates = pXRRRates( gdi_display, DefaultScreen(gdi_display), size_index, &rate_count );
+        if (rate_count)
+            mode_count += rate_count;
+        else
+            ++mode_count;
+    }
 
-        rates = pXRRRates( gdi_display, DefaultScreen(gdi_display), i, &rates_count );
-        TRACE("- at %d: %dx%d (%d rates):", i, sizes[i].width, sizes[i].height, rates_count);
-        if (rates_count)
+    /* Allocate space for reported modes in three depths, and put an SizeID at the end of DEVMODEW as
+     * driver private data */
+    modes = heap_calloc( mode_count * DEPTH_COUNT, sizeof(*modes) + sizeof(SizeID) );
+    if (!modes)
+    {
+        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
+        return FALSE;
+    }
+
+    for (size_index = 0; size_index < size_count; ++size_index)
+    {
+        for (depth_index = 0; depth_index < DEPTH_COUNT; ++depth_index)
         {
-            nmodes += rates_count;
-            for (j = 0; j < rates_count; ++j)
+            rates = pXRRRates( gdi_display, DefaultScreen(gdi_display), size_index, &rate_count );
+            for (rate_index = 0; rate_index < rate_count || !rate_count; ++rate_index)
             {
-                if (j > 0)
-                    TRACE(",");
-                TRACE("  %d", rates[j]);
+                mode = (DEVMODEW *)((BYTE *)modes + (sizeof(*mode) + sizeof(SizeID)) * mode_index++);
+                mode->dmSize = sizeof(*mode);
+                mode->dmDriverExtra = sizeof(SizeID);
+                *((SizeID *)((BYTE *)mode + sizeof(*mode))) = size_index;
+                mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS;
+                mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+                mode->dmBitsPerPel = depths[depth_index];
+                mode->dmPelsWidth = sizes[size_index].width;
+                mode->dmPelsHeight = sizes[size_index].height;
+                mode->u2.dmDisplayFlags = 0;
+                if (rate_count)
+                {
+                    mode->dmFields |= DM_DISPLAYFREQUENCY;
+                    mode->dmDisplayFrequency = rates[rate_index];
+                }
+                else
+                {
+                    mode->dmDisplayFrequency = 0;
+                    continue;
+                }
             }
         }
-        else
-        {
-            ++nmodes;
-            TRACE(" <default>");
-        }
-        TRACE(" Hz\n");
     }
 
-    TRACE("XRandR modes: count=%d\n", nmodes);
+    *new_modes = modes;
+    *new_mode_count = mode_index;
+    return TRUE;
+}
 
-    if (!(xrandr10_modes = HeapAlloc( GetProcessHeap(), 0, sizeof(*xrandr10_modes) * nmodes )))
+static void xrandr10_free_modes( DEVMODEW *modes )
+{
+    heap_free( modes );
+}
+
+static BOOL xrandr10_get_current_settings(ULONG_PTR id, DEVMODEW *mode)
+{
+    XRRScreenConfiguration *screen_config;
+    XRRScreenSize *sizes;
+    Rotation rotation;
+    SizeID size_id;
+    INT size_count;
+    short rate;
+
+    mode->dmDriverExtra = 0;
+    mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS
+                     | DM_DISPLAYFREQUENCY | DM_POSITION;
+    mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+    mode->u2.dmDisplayFlags = 0;
+    mode->u1.s2.dmPosition.x = 0;
+    mode->u1.s2.dmPosition.y = 0;
+
+    if (!id)
     {
-        ERR("Failed to allocate xrandr mode info array.\n");
-        return;
+        FIXME("Non-primary adapters are unsupported.\n");
+        mode->dmBitsPerPel = 0;
+        mode->dmPelsWidth = 0;
+        mode->dmPelsHeight = 0;
+        mode->dmDisplayFrequency = 0;
+        return TRUE;
     }
 
-    dd_modes = X11DRV_Settings_SetHandlers( "XRandR 1.0",
-                                            xrandr10_get_current_mode,
-                                            xrandr10_set_current_mode,
-                                            nmodes, 1 );
+    sizes = pXRRSizes( gdi_display, DefaultScreen(gdi_display), &size_count );
+    if (size_count <= 0)
+        return FALSE;
 
-    xrandr_mode_count = 0;
-    for (i = 0; i < sizes_count; ++i)
-    {
-        int rates_count;
-        short *rates;
+    screen_config = pXRRGetScreenInfo( gdi_display, DefaultRootWindow(gdi_display) );
+    size_id = pXRRConfigCurrentConfiguration( screen_config, &rotation );
+    rate = pXRRConfigCurrentRate( screen_config );
+    pXRRFreeScreenConfigInfo( screen_config );
 
-        rates = pXRRRates( gdi_display, DefaultScreen(gdi_display), i, &rates_count );
+    mode->dmBitsPerPel = screen_bpp;
+    mode->dmPelsWidth = sizes[size_id].width;
+    mode->dmPelsHeight = sizes[size_id].height;
+    mode->dmDisplayFrequency = rate;
+    return TRUE;
+}
 
-        if (rates_count)
-        {
-            for (j = 0; j < rates_count; ++j)
-            {
-                X11DRV_Settings_AddOneMode( sizes[i].width, sizes[i].height, 0, rates[j] );
-                xrandr10_modes[xrandr_mode_count++] = i;
-            }
-        }
-        else
-        {
-            X11DRV_Settings_AddOneMode( sizes[i].width, sizes[i].height, 0, 0 );
-            xrandr10_modes[xrandr_mode_count++] = i;
-        }
-    }
+static LONG xrandr10_set_current_settings( ULONG_PTR id, DEVMODEW *mode )
+{
+    XRRScreenConfiguration *screen_config;
+    Rotation rotation;
+    SizeID size_id;
+    Window root;
+    Status stat;
 
-    X11DRV_Settings_AddDepthModes();
-    nmodes = X11DRV_Settings_GetModeCount();
+    /* Non-primary adapters are unsupported */
+    if (!id)
+        return DISP_CHANGE_SUCCESSFUL;
 
-    TRACE("Available DD modes: count=%d\n", nmodes);
-    TRACE("Enabling XRandR\n");
+    assert(mode->dmDriverExtra == sizeof(SizeID));
+
+    if (mode->dmFields & DM_BITSPERPEL && mode->dmBitsPerPel != screen_bpp)
+        WARN("Cannot change screen bit depth from %dbits to %dbits!\n", screen_bpp, mode->dmBitsPerPel);
+
+    root = DefaultRootWindow(gdi_display);
+    screen_config = pXRRGetScreenInfo( gdi_display, root );
+    pXRRConfigCurrentConfiguration( screen_config, &rotation );
+    size_id = *((SizeID *)((BYTE *)mode + sizeof(*mode)));
+
+    if (mode->dmFields & DM_DISPLAYFREQUENCY && mode->dmDisplayFrequency)
+        stat = pXRRSetScreenConfigAndRate( gdi_display, screen_config, root, size_id, rotation, mode->dmDisplayFrequency,
+                                           CurrentTime );
+    else
+        stat = pXRRSetScreenConfig( gdi_display, screen_config, root, size_id, rotation, CurrentTime );
+    pXRRFreeScreenConfigInfo( screen_config );
+
+    if (stat != RRSetConfigSuccess)
+        return DISP_CHANGE_FAILED;
+
+    XSync( gdi_display, FALSE );
+    return DISP_CHANGE_SUCCESSFUL;
 }
 
 #ifdef HAVE_XRRGETPROVIDERRESOURCES
@@ -1535,7 +1551,15 @@ void X11DRV_XRandR_Init(void)
 
     TRACE("Found XRandR %d.%d.\n", major, minor);
 
-    xrandr10_init_modes();
+    settings_handler.name = "XRandR 1.0";
+    settings_handler.priority = 200;
+    settings_handler.get_id = xrandr10_get_id;
+    settings_handler.get_modes = xrandr10_get_modes;
+    settings_handler.free_modes = xrandr10_free_modes;
+    settings_handler.get_current_settings = xrandr10_get_current_settings;
+    settings_handler.set_current_settings = xrandr10_set_current_settings;
+    settings_handler.convert_coordinates = NULL;
+    X11DRV_Settings_SetHandler( &settings_handler );
 
 #ifdef HAVE_XRRGETPROVIDERRESOURCES
     if (ret >= 4 && (major > 1 || (major == 1 && minor >= 4)))
