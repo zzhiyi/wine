@@ -834,7 +834,7 @@ static const struct wined3d_parent_ops d3d11_swapchain_wined3d_parent_ops =
 };
 
 HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_device *device,
-        struct wined3d_swapchain_desc *desc)
+        struct IDXGIFactory *factory, struct wined3d_swapchain_desc *desc)
 {
     BOOL fullscreen;
     HRESULT hr;
@@ -847,13 +847,8 @@ HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_devi
         if (desc->backbuffer_format == WINED3DFMT_UNKNOWN)
             return E_INVALIDARG;
 
-        if (FAILED(hr = IWineDXGIAdapter_GetParent(device->adapter, &IID_IDXGIFactory,
-                (void **)&swapchain->factory)))
-        {
-            WARN("Failed to get adapter parent, hr %#x.\n", hr);
-            return hr;
-        }
         IWineDXGIDevice_AddRef(swapchain->device = &device->IWineDXGIDevice_iface);
+        IDXGIFactory_AddRef(swapchain->factory = factory);
     }
     else
     {
