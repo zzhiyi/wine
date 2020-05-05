@@ -5192,9 +5192,6 @@ static BOOL wined3d_adapter_gl_init(struct wined3d_adapter_gl *adapter_gl,
     TRACE("adapter_gl %p, ordinal %u, wined3d_creation_flags %#x.\n",
             adapter_gl, ordinal, wined3d_creation_flags);
 
-    if (!wined3d_adapter_init(&adapter_gl->a, ordinal, &wined3d_adapter_gl_ops))
-        return FALSE;
-
     /* Dynamically load all GL core functions */
 #ifdef USE_WIN32_OPENGL
     {
@@ -5291,6 +5288,9 @@ static BOOL wined3d_adapter_gl_init(struct wined3d_adapter_gl *adapter_gl,
     wined3d_caps_gl_ctx_destroy(&caps_gl_ctx);
 
     wined3d_adapter_init_ffp_attrib_ops(&adapter_gl->a);
+
+    if (!wined3d_adapter_init(&adapter_gl->a, ordinal, &wined3d_adapter_gl_ops))
+        return FALSE;
 
     return TRUE;
 }
