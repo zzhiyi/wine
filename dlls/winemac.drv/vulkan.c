@@ -86,6 +86,8 @@ static void (*pvkDestroySwapchainKHR)(VkDevice, VkSwapchainKHR, const VkAllocati
 static VkResult (*pvkEnumerateInstanceExtensionProperties)(const char *, uint32_t *, VkExtensionProperties *);
 static void * (*pvkGetDeviceProcAddr)(VkDevice, const char *);
 static void * (*pvkGetInstanceProcAddr)(VkInstance, const char *);
+static void (*pvkGetPhysicalDeviceProperties2)(VkPhysicalDevice, VkPhysicalDeviceProperties2 *);
+static void (*pvkGetPhysicalDeviceProperties2KHR)(VkPhysicalDevice, VkPhysicalDeviceProperties2 *);
 static VkResult (*pvkGetPhysicalDeviceSurfaceCapabilitiesKHR)(VkPhysicalDevice, VkSurfaceKHR, VkSurfaceCapabilitiesKHR *);
 static VkResult (*pvkGetPhysicalDeviceSurfaceFormatsKHR)(VkPhysicalDevice, VkSurfaceKHR, uint32_t *, VkSurfaceFormatKHR *);
 static VkResult (*pvkGetPhysicalDeviceSurfacePresentModesKHR)(VkPhysicalDevice, VkSurfaceKHR, uint32_t *, VkPresentModeKHR *);
@@ -112,6 +114,7 @@ static BOOL WINAPI wine_vk_init(INIT_ONCE *once, void *param, void **context)
     }
 
 #define LOAD_FUNCPTR(f) if ((p##f = wine_dlsym(vulkan_handle, #f, NULL, 0)) == NULL) goto fail;
+#define LOAD_OPTIONAL_FUNCPTR(f) p##f = wine_dlsym(vulkan_handle, #f, NULL, 0);
     LOAD_FUNCPTR(vkCreateInstance)
     LOAD_FUNCPTR(vkCreateSwapchainKHR)
     LOAD_FUNCPTR(vkCreateMacOSSurfaceMVK)
@@ -122,6 +125,8 @@ static BOOL WINAPI wine_vk_init(INIT_ONCE *once, void *param, void **context)
     LOAD_FUNCPTR(vkEnumerateInstanceExtensionProperties)
     LOAD_FUNCPTR(vkGetDeviceProcAddr)
     LOAD_FUNCPTR(vkGetInstanceProcAddr)
+    LOAD_FUNCPTR(vkGetPhysicalDeviceProperties2)
+    LOAD_OPTIONAL_FUNCPTR(vkGetPhysicalDeviceProperties2KHR)
     LOAD_FUNCPTR(vkGetPhysicalDeviceSurfaceCapabilitiesKHR)
     LOAD_FUNCPTR(vkGetPhysicalDeviceSurfaceFormatsKHR)
     LOAD_FUNCPTR(vkGetPhysicalDeviceSurfacePresentModesKHR)
@@ -441,6 +446,25 @@ static void *macdrv_vkGetInstanceProcAddr(VkInstance instance, const char *name)
     return pvkGetInstanceProcAddr(instance, name);
 }
 
+static void macdrv_vkGetPhysicalDeviceProperties2(VkPhysicalDevice phys_dev,
+        VkPhysicalDeviceProperties2 *properties)
+{
+    TRACE("%p, %p\n", phys_dev, properties);
+
+    pvkGetPhysicalDeviceProperties2(phys_dev, properties);
+}
+
+static void macdrv_vkGetPhysicalDeviceProperties2KHR(VkPhysicalDevice phys_dev,
+        VkPhysicalDeviceProperties2 *properties)
+{
+    TRACE("%p, %p\n", phys_dev, properties);
+
+    if (pvkGetPhysicalDeviceProperties2KHR)
+        pvkGetPhysicalDeviceProperties2KHR(phys_dev, properties);
+    else
+        pvkGetPhysicalDeviceProperties2(phys_dev, properties);
+}
+
 static VkResult macdrv_vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice phys_dev,
         VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR *capabilities)
 {
@@ -531,24 +555,26 @@ static VkResult macdrv_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *
 
 static const struct vulkan_funcs vulkan_funcs =
 {
-    macdrv_vkCreateInstance,
-    macdrv_vkCreateSwapchainKHR,
-    macdrv_vkCreateWin32SurfaceKHR,
-    macdrv_vkDestroyInstance,
-    macdrv_vkDestroySurfaceKHR,
-    macdrv_vkDestroySwapchainKHR,
-    macdrv_vkEnumerateInstanceExtensionProperties,
-    NULL,
-    macdrv_vkGetDeviceProcAddr,
-    macdrv_vkGetInstanceProcAddr,
-    NULL,
-    macdrv_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
-    macdrv_vkGetPhysicalDeviceSurfaceFormatsKHR,
-    macdrv_vkGetPhysicalDeviceSurfacePresentModesKHR,
-    macdrv_vkGetPhysicalDeviceSurfaceSupportKHR,
-    macdrv_vkGetPhysicalDeviceWin32PresentationSupportKHR,
-    macdrv_vkGetSwapchainImagesKHR,
-    macdrv_vkQueuePresentKHR,
+    .p_vkCreateInstance = macdrv_vkCreateInstance,
+    .p_vkCreateSwapchainKHR = macdrv_vkCreateSwapchainKHR,
+    .p_vkCreateWin32SurfaceKHR = macdrv_vkCreateWin32SurfaceKHR,
+    .p_vkDestroyInstance = macdrv_vkDestroyInstance,
+    .p_vkDestroySurfaceKHR = macdrv_vkDestroySurfaceKHR,
+    .p_vkDestroySwapchainKHR = macdrv_vkDestroySwapchainKHR,
+    .p_vkEnumerateInstanceExtensionProperties = macdrv_vkEnumerateInstanceExtensionProperties,
+    .p_vkGetDeviceGroupSurfacePresentModesKHR = NULL,
+    .p_vkGetDeviceProcAddr = macdrv_vkGetDeviceProcAddr,
+    .p_vkGetInstanceProcAddr = macdrv_vkGetInstanceProcAddr,
+    .p_vkGetPhysicalDevicePresentRectanglesKHR = NULL,
+    .p_vkGetPhysicalDeviceProperties2 = macdrv_vkGetPhysicalDeviceProperties2,
+    .p_vkGetPhysicalDeviceProperties2KHR = macdrv_vkGetPhysicalDeviceProperties2KHR,
+    .p_vkGetPhysicalDeviceSurfaceCapabilitiesKHR = macdrv_vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
+    .p_vkGetPhysicalDeviceSurfaceFormatsKHR = macdrv_vkGetPhysicalDeviceSurfaceFormatsKHR,
+    .p_vkGetPhysicalDeviceSurfacePresentModesKHR = macdrv_vkGetPhysicalDeviceSurfacePresentModesKHR,
+    .p_vkGetPhysicalDeviceSurfaceSupportKHR = macdrv_vkGetPhysicalDeviceSurfaceSupportKHR,
+    .p_vkGetPhysicalDeviceWin32PresentationSupportKHR = macdrv_vkGetPhysicalDeviceWin32PresentationSupportKHR,
+    .p_vkGetSwapchainImagesKHR = macdrv_vkGetSwapchainImagesKHR,
+    .p_vkQueuePresentKHR = macdrv_vkQueuePresentKHR,
 };
 
 static void *macdrv_get_vk_device_proc_addr(const char *name)

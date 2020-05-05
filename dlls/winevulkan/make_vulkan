@@ -141,7 +141,7 @@ FAKED_EXTENSIONS = [
 # Functions part of our winevulkan graphics driver interface.
 # DRIVER_VERSION should be bumped on any change to driver interface
 # in FUNCTION_OVERRIDES
-DRIVER_VERSION = 8
+DRIVER_VERSION = 9
 
 # Table of functions for which we have a special implementation.
 # These are regular device / instance functions for which we need
@@ -168,6 +168,8 @@ FUNCTION_OVERRIDES = {
     "vkGetPhysicalDeviceExternalFenceProperties" : {"dispatch" : False, "driver" : False, "thunk" : False},
     "vkGetPhysicalDeviceExternalSemaphoreProperties" : {"dispatch" : False, "driver" : False, "thunk" : False},
     "vkGetPhysicalDeviceImageFormatProperties2" : {"dispatch" : True, "driver" : False, "thunk" : True, "private_thunk" : True},
+    "vkGetPhysicalDeviceProperties2" : {"dispatch" : True, "driver" : True, "thunk" : True},
+    "vkGetPhysicalDeviceProperties2KHR" : {"dispatch" : True, "driver" : True, "thunk" : True},
 
     # Device functions
     "vkAllocateCommandBuffers" : {"dispatch" : True, "driver" : False, "thunk" : False},
