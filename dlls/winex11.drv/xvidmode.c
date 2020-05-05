@@ -2,6 +2,7 @@
  * DirectDraw XVidMode interface
  *
  * Copyright 2001 TransGaming Technologies, Inc.
+ * Copyright 2020 Zhiyi Zhang for CodeWeavers
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,9 +22,13 @@
 #include "config.h"
 #include "wine/port.h"
 
+#include <assert.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+
+#define NONAMELESSSTRUCT
+#define NONAMELESSUNION
 
 #include "x11drv.h"
 
@@ -38,6 +43,7 @@
 #include "wingdi.h"
 #include "wine/debug.h"
 #include "wine/heap.h"
+#include "wine/unicode.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(xvidmode);
 
@@ -51,11 +57,6 @@ static int xf86vm_event, xf86vm_error, xf86vm_major, xf86vm_minor;
 static int xf86vm_gammaramp_size;
 static BOOL xf86vm_use_gammaramp;
 #endif /* X_XF86VidModeSetGammaRamp */
-
-static struct x11drv_mode_info *dd_modes;
-static unsigned int dd_mode_count;
-static XF86VidModeModeInfo** real_xf86vm_modes;
-static unsigned int real_xf86vm_mode_count;
 
 #define MAKE_FUNCPTR(f) static typeof(f) * p##f;
 MAKE_FUNCPTR(XF86VidModeGetAllModeLines)
@@ -77,85 +78,181 @@ MAKE_FUNCPTR(XF86VidModeSetGammaRamp)
 #undef MAKE_FUNCPTR
 
 
-static void convert_modeinfo( const XF86VidModeModeInfo *mode)
-{
-  int rate;
-  if (mode->htotal!=0 && mode->vtotal!=0)
-      rate = mode->dotclock * 1000 / (mode->htotal * mode->vtotal);
-  else
-      rate = 0;
-  X11DRV_Settings_AddOneMode(mode->hdisplay, mode->vdisplay, 0, rate);
-}
-
-static void convert_modeline(int dotclock, const XF86VidModeModeLine *mode,
-                             struct x11drv_mode_info *info, unsigned int bpp)
-{
-  info->width   = mode->hdisplay;
-  info->height  = mode->vdisplay;
-  if (mode->htotal!=0 && mode->vtotal!=0)
-      info->refresh_rate = dotclock * 1000 / (mode->htotal * mode->vtotal);
-  else
-      info->refresh_rate = 0;
-  TRACE(" width=%d, height=%d, refresh=%d\n",
-        info->width, info->height, info->refresh_rate);
-  info->bpp     = bpp;
-}
-
 static int XVidModeErrorHandler(Display *dpy, XErrorEvent *event, void *arg)
 {
     return 1;
 }
 
-static int X11DRV_XF86VM_GetCurrentMode(void)
+static BOOL xf86vm_get_id(const WCHAR *device_name, ULONG_PTR *id)
 {
-  XF86VidModeModeLine line;
-  int dotclock;
-  unsigned int i;
-  struct x11drv_mode_info cmode;
-  DWORD dwBpp = screen_bpp;
+    static const WCHAR displayW[] = {'\\','\\','.','\\','D','I','S','P','L','A','Y'};
+    WCHAR primary_adapter[CCHDEVICENAME];
+    WCHAR *end_ptr;
 
-  TRACE("Querying XVidMode current mode\n");
-  pXF86VidModeGetModeLine(gdi_display, DefaultScreen(gdi_display), &dotclock, &line);
-  convert_modeline(dotclock, &line, &cmode, dwBpp);
-  for (i=0; i<dd_mode_count; i++)
-    if (memcmp(&dd_modes[i], &cmode, sizeof(cmode)) == 0) {
-      TRACE("mode=%d\n", i);
-      return i;
+    /* Device name has to be \\.\DISPLAY%d */
+    if (strncmpiW( device_name, displayW, ARRAY_SIZE(displayW) ))
+        return FALSE;
+
+    strtolW( device_name + ARRAY_SIZE(displayW), &end_ptr, 10 );
+    if (*end_ptr)
+        return FALSE;
+
+    if (!get_primary_adapter( primary_adapter ))
+        return FALSE;
+
+    /* XVidMode only supports changing the primary adapter settings.
+     * For non-primary adapters, an id is still provided but getting
+     * and changing non-primary adapters' settings will be ignored. */
+    *id = !lstrcmpiW( device_name, primary_adapter ) ? 1 : 0;
+    return TRUE;
+}
+
+static BOOL xf86vm_get_modes(ULONG_PTR id, DWORD flags, DEVMODEW **new_modes, INT *mode_count)
+{
+    XF86VidModeModeInfo **xf86vm_modes;
+    INT xf86vm_mode_count;
+    DEVMODEW *modes, *mode;
+    INT depth_index;
+    INT mode_index;
+    INT offset;
+    Bool ret;
+
+    ret = pXF86VidModeGetAllModeLines(gdi_display, DefaultScreen(gdi_display), &xf86vm_mode_count, &xf86vm_modes);
+    if (!ret || !xf86vm_mode_count)
+        return FALSE;
+
+    /* Allocate space for reported modes in different color depths, and put an XF86VidModeModeInfo**
+     * at the end of DEVMODEW as driver private data */
+    modes = heap_calloc(xf86vm_mode_count * DEPTH_COUNT, sizeof(*modes) + sizeof(XF86VidModeModeInfo **));
+    if (!modes)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
     }
-  ERR("In unknown mode, returning default\n");
-  return 0;
+
+    for (depth_index = 0; depth_index < DEPTH_COUNT; ++depth_index)
+    {
+        for (mode_index = 0; mode_index < xf86vm_mode_count; ++mode_index)
+        {
+            offset = (sizeof(*mode) + sizeof(XF86VidModeModeInfo **)) * (depth_index * xf86vm_mode_count + mode_index);
+            mode = (DEVMODEW *)((BYTE *)modes + offset);
+
+            mode->dmSize = sizeof(*mode);
+            mode->dmDriverExtra = sizeof(XF86VidModeModeInfo **);
+            *((XF86VidModeModeInfo ***)((BYTE *)mode + sizeof(*mode))) = &xf86vm_modes[mode_index];
+            mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS;
+            mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+            mode->dmBitsPerPel = depths[depth_index];
+            mode->dmPelsWidth = xf86vm_modes[mode_index]->hdisplay;
+            mode->dmPelsHeight = xf86vm_modes[mode_index]->vdisplay;
+            mode->u2.dmDisplayFlags = 0;
+            if (xf86vm_modes[mode_index]->htotal && xf86vm_modes[mode_index]->vtotal)
+            {
+                mode->dmFields |= DM_DISPLAYFREQUENCY;
+                mode->dmDisplayFrequency = xf86vm_modes[mode_index]->dotclock * 1000
+                                           / (xf86vm_modes[mode_index]->htotal * xf86vm_modes[mode_index]->vtotal);
+            }
+        }
+    }
+
+    *new_modes = modes;
+    *mode_count = xf86vm_mode_count * DEPTH_COUNT;
+    return TRUE;
 }
 
-static LONG X11DRV_XF86VM_SetCurrentMode(int mode)
+static void xf86vm_free_modes(DEVMODEW *modes)
 {
-  DWORD dwBpp = screen_bpp;
-  /* only set modes from the original color depth */
-  if (dwBpp != dd_modes[mode].bpp)
-  {
-      FIXME("Cannot change screen BPP from %d to %d\n", dwBpp, dd_modes[mode].bpp);
-  }
-  mode = mode % real_xf86vm_mode_count;
-
-  TRACE("Resizing X display to %dx%d\n", 
-        real_xf86vm_modes[mode]->hdisplay, real_xf86vm_modes[mode]->vdisplay);
-  pXF86VidModeSwitchToMode(gdi_display, DefaultScreen(gdi_display), real_xf86vm_modes[mode]);
-#if 0 /* it is said that SetViewPort causes problems with some X servers */
-  pXF86VidModeSetViewPort(gdi_display, DefaultScreen(gdi_display), 0, 0);
-#else
-  XWarpPointer(gdi_display, None, DefaultRootWindow(gdi_display), 0, 0, 0, 0, 0, 0);
-#endif
-  XSync(gdi_display, False);
-  X11DRV_DisplayDevices_Update( TRUE );
-  return DISP_CHANGE_SUCCESSFUL;
+    if (modes)
+        XFree(*(XF86VidModeModeInfo ***)((BYTE *)modes + sizeof(*modes)));
+    heap_free(modes);
 }
 
+static BOOL xf86vm_get_current_settings(ULONG_PTR id, DEVMODEW *mode)
+{
+    XF86VidModeModeLine xf86vm_mode;
+    INT dotclock;
+    Bool ret;
+
+    mode->dmDriverExtra = 0;
+    mode->dmFields = DM_DISPLAYORIENTATION | DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFLAGS
+                     | DM_DISPLAYFREQUENCY | DM_POSITION;
+    mode->u1.s2.dmDisplayOrientation = DMDO_DEFAULT;
+    mode->u2.dmDisplayFlags = 0;
+    mode->u1.s2.dmPosition.x = 0;
+    mode->u1.s2.dmPosition.y = 0;
+
+    if (!id)
+    {
+        FIXME("Non-primary adapters are unsupported.\n");
+        mode->dmBitsPerPel = 0;
+        mode->dmPelsWidth = 0;
+        mode->dmPelsHeight = 0;
+        mode->dmDisplayFrequency = 0;
+        return TRUE;
+    }
+
+    ret = pXF86VidModeGetModeLine(gdi_display, DefaultScreen(gdi_display), &dotclock, &xf86vm_mode);
+    if (!ret)
+        return FALSE;
+
+    mode->dmBitsPerPel = screen_bpp;
+    mode->dmPelsWidth = xf86vm_mode.hdisplay;
+    mode->dmPelsHeight = xf86vm_mode.vdisplay;
+    if (xf86vm_mode.htotal && xf86vm_mode.vtotal)
+        mode->dmDisplayFrequency = dotclock * 1000 / (xf86vm_mode.htotal * xf86vm_mode.vtotal);
+    else
+        mode->dmDisplayFrequency = 0;
+
+    if (xf86vm_mode.privsize)
+        XFree(xf86vm_mode.private);
+    return TRUE;
+}
+
+/* XF86VidModeSwitchToMode doesn't change screen size to fit a larger mode.
+ * And it refuses to change to a larger mode if the screen size is smaller
+ * than the new mode size. So you can only use smaller resolutions than
+ * current mode. And once you changed to a smaller mode, you can't go back
+ * to the larger mode. You end up having modes smaller and smaller with
+ * this handler.
+ *
+ * XRandR can be used to change the screen size. But if XRandR is available,
+ * Wine doesn't have to fallback to using XVidMode in the first place. */
+static LONG xf86vm_set_current_settings(ULONG_PTR id, DEVMODEW *mode)
+{
+    XF86VidModeModeInfo **xf86vm_mode;
+    Bool ret;
+
+    /* Non-primary adapters are unsupported */
+    if (!id)
+        return DISP_CHANGE_SUCCESSFUL;
+
+    assert(mode->dmDriverExtra == sizeof(XF86VidModeModeInfo **));
+
+    if (mode->dmFields & DM_BITSPERPEL && mode->dmBitsPerPel != screen_bpp)
+        WARN("Cannot change screen bit depth from %dbits to %dbits!\n", screen_bpp, mode->dmBitsPerPel);
+
+    xf86vm_mode = *((XF86VidModeModeInfo ***)((BYTE *)mode + sizeof(*mode)));
+    X11DRV_expect_error(gdi_display, XVidModeErrorHandler, NULL);
+    ret = pXF86VidModeSwitchToMode(gdi_display, DefaultScreen(gdi_display), *xf86vm_mode);
+    if (ret)
+        XSync(gdi_display, FALSE);
+    if (X11DRV_check_error())
+        ret = FALSE;
+    if (!ret)
+        return DISP_CHANGE_FAILED;
+#if 0 /* it is said that SetViewPort causes problems with some X servers */
+    pXF86VidModeSetViewPort(gdi_display, DefaultScreen(gdi_display), 0, 0);
+#else
+    XWarpPointer(gdi_display, None, DefaultRootWindow(gdi_display), 0, 0, 0, 0, 0, 0);
+#endif
+    return DISP_CHANGE_SUCCESSFUL;
+}
 
 void X11DRV_XF86VM_Init(void)
 {
+  struct x11drv_settings_handler xf86vm_handler;
   void *xvidmode_handle;
   Bool ok;
-  int nmodes;
-  unsigned int i;
 
   if (xf86vm_major) return; /* already initialized? */
 
@@ -207,34 +304,19 @@ void X11DRV_XF86VM_Init(void)
   }
 #endif /* X_XF86VidModeSetGammaRamp */
 
-  /* retrieve modes */
-  if (usexvidmode && !is_virtual_desktop())
-  {
-      X11DRV_expect_error(gdi_display, XVidModeErrorHandler, NULL);
-      ok = pXF86VidModeGetAllModeLines(gdi_display, DefaultScreen(gdi_display), &nmodes, &real_xf86vm_modes);
-      if (X11DRV_check_error() || !ok) return;
-  }
-  else return; /* In desktop mode, do not switch resolution... But still use the Gamma ramp stuff */
+  if (!usexvidmode || is_virtual_desktop())
+    return;
 
-  TRACE("XVidMode modes: count=%d\n", nmodes);
+  xf86vm_handler.name = "XF86VidMode";
+  xf86vm_handler.priority = 100;
+  xf86vm_handler.get_id = xf86vm_get_id;
+  xf86vm_handler.get_modes = xf86vm_get_modes;
+  xf86vm_handler.free_modes = xf86vm_free_modes;
+  xf86vm_handler.get_current_settings = xf86vm_get_current_settings;
+  xf86vm_handler.set_current_settings = xf86vm_set_current_settings;
+  xf86vm_handler.convert_coordinates = NULL;
+  X11DRV_Settings_SetHandler(&xf86vm_handler);
 
-  real_xf86vm_mode_count = nmodes;
-
-  dd_modes = X11DRV_Settings_SetHandlers("XF86VidMode", 
-                                         X11DRV_XF86VM_GetCurrentMode, 
-                                         X11DRV_XF86VM_SetCurrentMode, 
-                                         nmodes, 1);
-
-  /* convert modes to x11drv_mode_info format */
-  for (i=0; i<real_xf86vm_mode_count; i++)
-  {
-      convert_modeinfo(real_xf86vm_modes[i]);
-  }
-  /* add modes for different color depths */
-  X11DRV_Settings_AddDepthModes();
-  dd_mode_count = X11DRV_Settings_GetModeCount();
-
-  TRACE("Available DD modes: count=%d\n", dd_mode_count);
   TRACE("Enabling XVidMode\n");
   return;
 
