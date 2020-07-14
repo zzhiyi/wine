@@ -3119,7 +3119,7 @@ static BOOL CALLBACK test_enum_display_settings(HMONITOR hmonitor, HDC hdc, LPRE
     ret = EnumDisplaySettingsA(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm);
     ok(ret, "EnumDisplaySettingsA failed, error %#x\n", GetLastError());
 
-    todo_wine ok((dm.dmFields & (DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT)) == (DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT),
+    ok((dm.dmFields & (DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT)) == (DM_POSITION | DM_PELSWIDTH | DM_PELSHEIGHT),
             "Unexpected dmFields %#x.\n", dm.dmFields);
     /* Wine currently reports primary adapter positions for all adapters, same for other todo_wines in this function */
     ret = get_primary_adapter_name(primary_adapter);
@@ -3158,18 +3158,18 @@ static void test_EnumDisplaySettings(void)
     dm.dmSize = sizeof(dm);
     SetLastError(0xdeadbeef);
     ret = EnumDisplaySettingsA("invalid", ENUM_CURRENT_SETTINGS, &dm);
-    todo_wine ok(!ret, "EnumDisplaySettingsA succeeded\n");
+    ok(!ret, "EnumDisplaySettingsA succeeded\n");
     ok(GetLastError() == 0xdeadbeef, "Expect error 0xdeadbeef, got %#x\n", GetLastError());
-    todo_wine ok(dm.dmFields == 0, "Expect dmFields unchanged, got %#x\n", dm.dmFields);
+    ok(dm.dmFields == 0, "Expect dmFields unchanged, got %#x\n", dm.dmFields);
 
     /* Monitor device names are invalid */
     memset(&dm, 0, sizeof(dm));
     dm.dmSize = sizeof(dm);
     SetLastError(0xdeadbeef);
     ret = EnumDisplaySettingsA("\\\\.\\DISPLAY1\\Monitor0", ENUM_CURRENT_SETTINGS, &dm);
-    todo_wine ok(!ret, "EnumDisplaySettingsA succeeded\n");
+    ok(!ret, "EnumDisplaySettingsA succeeded\n");
     ok(GetLastError() == 0xdeadbeef, "Expect error 0xdeadbeef, got %#x\n", GetLastError());
-    todo_wine ok(dm.dmFields == 0, "Expect dmFields unchanged, got %#x\n", dm.dmFields);
+    ok(dm.dmFields == 0, "Expect dmFields unchanged, got %#x\n", dm.dmFields);
 
     /* Test that passing NULL to device name parameter means to use the primary adapter */
     memset(&dm, 0, sizeof(dm));
@@ -3191,7 +3191,7 @@ static void test_EnumDisplaySettings(void)
     ok(ret, "EnumDisplaySettingsA failed, error %#x\n", GetLastError());
     ok(dm.dmSize == FIELD_OFFSET(DEVMODEA, dmICMMethod), "Expect dmSize %u, got %u\n",
             FIELD_OFFSET(DEVMODEA, dmICMMethod), dm.dmSize);
-    todo_wine ok((dm.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
+    ok((dm.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
             setting_fields, dm.dmFields);
 
     memset(&dm, 0, sizeof(dm));
@@ -3200,7 +3200,7 @@ static void test_EnumDisplaySettings(void)
     ok(ret, "EnumDisplaySettingsA failed, error %#x\n", GetLastError());
     ok(dm.dmSize == FIELD_OFFSET(DEVMODEA, dmICMMethod), "Expect dmSize %u, got %u\n",
             FIELD_OFFSET(DEVMODEA, dmICMMethod), dm.dmSize);
-    todo_wine ok((dm.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
+    ok((dm.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
             setting_fields, dm.dmFields);
 
     memset(&dmW, 0, sizeof(dmW));
@@ -3208,7 +3208,7 @@ static void test_EnumDisplaySettings(void)
     ok(ret, "EnumDisplaySettingsW failed, error %#x\n", GetLastError());
     ok(dmW.dmSize == FIELD_OFFSET(DEVMODEW, dmICMMethod), "Expect dmSize %u, got %u\n",
             FIELD_OFFSET(DEVMODEW, dmICMMethod), dmW.dmSize);
-    todo_wine ok((dmW.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
+    ok((dmW.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
             setting_fields, dmW.dmFields);
 
     memset(&dmW, 0, sizeof(dmW));
@@ -3217,7 +3217,7 @@ static void test_EnumDisplaySettings(void)
     ok(ret, "EnumDisplaySettingsW failed, error %#x\n", GetLastError());
     ok(dmW.dmSize == FIELD_OFFSET(DEVMODEW, dmICMMethod), "Expect dmSize %u, got %u\n",
             FIELD_OFFSET(DEVMODEW, dmICMMethod), dmW.dmSize);
-    todo_wine ok((dmW.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
+    ok((dmW.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
             setting_fields, dmW.dmFields);
 
     /* EnumDisplaySettingsExA/W need dmSize to be at least FIELD_OFFSET(DEVMODEA/W, dmFields) + 1 to have valid dmFields */
@@ -3275,7 +3275,7 @@ static void test_EnumDisplaySettings(void)
     dm.dmSize = sizeof(dm);
     ret = EnumDisplaySettingsExA(NULL, ENUM_CURRENT_SETTINGS, &dm, 0);
     ok(ret, "EnumDisplaySettingsExA failed, error %#x\n", GetLastError());
-    todo_wine ok((dm.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
+    ok((dm.dmFields & setting_fields) == setting_fields, "Expect dmFields to contain %#x, got %#x\n",
             setting_fields, dm.dmFields);
     ok(dm.dmBitsPerPel == val, "Expect dmBitsPerPel %d, got %d\n", val, dm.dmBitsPerPel);
 
@@ -3318,12 +3318,11 @@ static void test_EnumDisplaySettings(void)
         {
             if (mode == ENUM_CURRENT_SETTINGS)
             {
-                todo_wine ok((dm.dmFields & setting_fields) == setting_fields,
+                ok((dm.dmFields & setting_fields) == setting_fields,
                         "Expect dmFields to contain %#x, got %#x\n", setting_fields, dm.dmFields);
             }
             else
             {
-                todo_wine_if(mode != ENUM_REGISTRY_SETTINGS)
                 ok((dm.dmFields & mode_fields) == mode_fields, "Expect dmFields to contain %#x, got %#x\n",
                         mode_fields, dm.dmFields);
             }
@@ -3334,10 +3333,10 @@ static void test_EnumDisplaySettings(void)
 
             if (mode == ENUM_CURRENT_SETTINGS && !attached)
             {
-                todo_wine ok(dm.dmBitsPerPel == 0, "Expect dmBitsPerPel zero, got %u\n", dm.dmBitsPerPel);
-                todo_wine ok(dm.dmPelsWidth == 0, "Expect dmPelsWidth zero, got %u\n", dm.dmPelsWidth);
-                todo_wine ok(dm.dmPelsHeight == 0, "Expect dmPelsHeight zero, got %u\n", dm.dmPelsHeight);
-                todo_wine ok(dm.dmDisplayFrequency == 0, "Expect dmDisplayFrequency zero, got %u\n", dm.dmDisplayFrequency);
+                ok(dm.dmBitsPerPel == 0, "Expect dmBitsPerPel zero, got %u\n", dm.dmBitsPerPel);
+                ok(dm.dmPelsWidth == 0, "Expect dmPelsWidth zero, got %u\n", dm.dmPelsWidth);
+                ok(dm.dmPelsHeight == 0, "Expect dmPelsHeight zero, got %u\n", dm.dmPelsHeight);
+                ok(dm.dmDisplayFrequency == 0, "Expect dmDisplayFrequency zero, got %u\n", dm.dmDisplayFrequency);
             }
             else if (mode != ENUM_REGISTRY_SETTINGS)
             {
