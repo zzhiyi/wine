@@ -3302,7 +3302,8 @@ static BOOL is_detached_mode(const DEVMODEW *mode)
 LONG WINAPI ChangeDisplaySettingsExW( LPCWSTR devname, LPDEVMODEW devmode, HWND hwnd,
                                       DWORD flags, LPVOID lparam )
 {
-    WCHAR primary_adapter[CCHDEVICENAME];
+    WCHAR primary_adapter[CCHDEVICENAME], *end;
+    long int display_idx;
     BOOL def_mode = TRUE;
     DEVMODEW dm;
     LONG ret;
@@ -3324,6 +3325,19 @@ LONG WINAPI ChangeDisplaySettingsExW( LPCWSTR devname, LPDEVMODEW devmode, HWND 
             return DISP_CHANGE_FAILED;
 
         devname = primary_adapter;
+    }
+
+    if (strncmpiW(devname, ADAPTER_PREFIX, ARRAY_SIZE(ADAPTER_PREFIX)))
+    {
+        ERR("Invalid device name %s.\n", wine_dbgstr_w(devname));
+        return DISP_CHANGE_BADPARAM;
+    }
+
+    display_idx = strtolW(devname + ARRAY_SIZE(ADAPTER_PREFIX), &end, 10);
+    if (*end || display_idx < 1)
+    {
+        ERR("Invalid device name %s.\n", wine_dbgstr_w(devname));
+        return DISP_CHANGE_BADPARAM;
     }
 
     if (devmode)
