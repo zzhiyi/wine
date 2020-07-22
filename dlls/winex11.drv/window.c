@@ -1361,6 +1361,42 @@ static void unmap_window( HWND hwnd )
 
 
 /***********************************************************************
+ *     iconify_window
+ */
+static void iconify_window( struct x11drv_win_data *data )
+{
+    struct
+    {
+        CARD32 state;
+        XID     icon;
+    } *state;
+    Atom type;
+    int format;
+    unsigned long count, remaining;
+
+    XIconifyWindow( data->display, data->whole_window, data->vis.screen );
+
+    /* Some WMs may not change the window state to IconicState via XIconifyWindow,
+       but instead just hide the window. This is undesired and different behavior
+       than pressing the minimize button, so force the state change here if we can. */
+    if (!XGetWindowProperty( data->display, data->whole_window, x11drv_atom(WM_STATE), 0,
+                             sizeof(*state)/sizeof(CARD32), False, x11drv_atom(WM_STATE),
+                             &type, &format, &count, &remaining, (unsigned char**)&state ))
+    {
+        if (type == x11drv_atom(WM_STATE) &&
+            get_property_size( format, count ) >= sizeof(*state) &&
+            state->state != IconicState)
+        {
+            state->state = IconicState;
+            XChangeProperty( data->display, data->whole_window, x11drv_atom(WM_STATE), type, format,
+                PropModeReplace, (unsigned char*)state, count);
+        }
+        XFree( state );
+    }
+}
+
+
+/***********************************************************************
  *     make_window_embedded
  */
 void make_window_embedded( struct x11drv_win_data *data )
@@ -2783,7 +2819,7 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
             set_wm_hints( data );
             TRACE( "changing win %p iconic state to %u\n", data->hwnd, data->iconic );
             if (data->iconic)
-                XIconifyWindow( data->display, data->whole_window, data->vis.screen );
+                iconify_window( data );
             else if (is_window_rect_mapped( rectWindow ))
                 XMapWindow( data->display, data->whole_window );
             update_net_wm_states( data );
