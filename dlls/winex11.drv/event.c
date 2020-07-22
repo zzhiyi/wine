@@ -628,7 +628,7 @@ static void set_focus( XEvent *xev, HWND hwnd, Time time )
         XSendEvent( xev->xany.display, xev->xany.window, False, 0, xev );
         return;
     }
-    else
+    else if ((long)(x11drv_thread_data()->setfocus_serial - xev->xany.serial) <= 0)
     {
         TRACE( "setting foreground window to %p\n", hwnd );
         SetForegroundWindow( hwnd );
@@ -845,7 +845,9 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
         return FALSE;
     }
 
-    SetForegroundWindow( hwnd );
+    if ((long)(x11drv_thread_data()->setfocus_serial - event->serial) <= 0)
+        SetForegroundWindow( hwnd );
+
     return TRUE;
 }
 
@@ -1534,6 +1536,7 @@ void wait_for_withdrawn_state( HWND hwnd, BOOL set )
  */
 void CDECL X11DRV_SetFocus( HWND hwnd )
 {
+    struct x11drv_thread_data *thread_data = x11drv_thread_data();
     struct x11drv_win_data *data;
 
     HWND parent;
@@ -1549,6 +1552,21 @@ void CDECL X11DRV_SetFocus( HWND hwnd )
     }
     if (!data->managed || data->embedder) set_input_focus( data );
     release_win_data( data );
+
+    hwnd = GetAncestor(hwnd, GA_ROOT);
+    if (hwnd != thread_data->setfocus_hwnd)
+    {
+        thread_data->setfocus_hwnd = hwnd;
+
+        /* If we are not processing an event, store the current serial so that
+           we ignore all older focus-related events. This prevents the focus
+           from being reverted later when the app processes its messages. */
+        if (!thread_data->current_event)
+        {
+            thread_data->setfocus_serial = NextRequest(thread_data->display);
+            XNoOp(thread_data->display);
+        }
+    }
 }
 
 

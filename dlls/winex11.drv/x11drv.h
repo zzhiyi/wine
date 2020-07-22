@@ -339,6 +339,8 @@ struct x11drv_thread_data
     HWND     last_xic_hwnd;        /* last xic window */
     XFontSet font_set;             /* international text drawing font set */
     Window   selection_wnd;        /* window used for selection interactions */
+    HWND     setfocus_hwnd;        /* top-level window corresponding to the last SetFocus */
+    unsigned long setfocus_serial; /* serial number when last SetFocus without an event happened */
     unsigned long warp_serial;     /* serial number of last pointer warp request */
     Window   clip_window;          /* window used for cursor clipping */
     HWND     clip_hwnd;            /* message window stored in desktop while clipping is active */
