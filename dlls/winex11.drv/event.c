@@ -1227,10 +1227,13 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
                hwnd, data->window_rect.right - data->window_rect.left,
                data->window_rect.bottom - data->window_rect.top, cx, cy );
 
+    read_net_wm_states( event->display, data );
+    if (data->net_wm_state & (1 << NET_WM_STATE_FULLSCREEN))
+        goto done;
+
     style = GetWindowLongW( data->hwnd, GWL_STYLE );
     if ((style & WS_CAPTION) == WS_CAPTION)
     {
-        read_net_wm_states( event->display, data );
         if ((data->net_wm_state & (1 << NET_WM_STATE_MAXIMIZED)))
         {
             if (!(style & WS_MAXIMIZE))
