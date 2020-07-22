@@ -832,7 +832,7 @@ static void set_mwm_hints( struct x11drv_win_data *data, DWORD style, DWORD ex_s
      * The window style will be updated again once the window has returned
      * from fullscreen.
      */
-    if (wm_is_mutter(data->display) && (data->net_wm_state & (1 << NET_WM_STATE_FULLSCREEN)))
+    if (wm_is_mutter(data->display) && (data->net_wm_state & (1 << NET_WM_STATE_FULLSCREEN)) && !data->iconic)
     {
         Atom type;
         int format;
@@ -870,6 +870,10 @@ static void set_mwm_hints( struct x11drv_win_data *data, DWORD style, DWORD ex_s
             if (style & WS_MINIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MINIMIZE;
             if (style & WS_MAXIMIZEBOX) mwm_hints.functions |= MWM_FUNC_MAXIMIZE;
             /*if (style & WS_SYSMENU)*/     mwm_hints.functions |= MWM_FUNC_CLOSE;
+
+            /* The window can be programmatically minimized even without
+               a minimize box button. Allow the WM to restore it. */
+            if (data->iconic) mwm_hints.functions |= MWM_FUNC_MINIMIZE | MWM_FUNC_MAXIMIZE;
         }
     }
 
@@ -2775,8 +2779,8 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
         }
         else if ((swp_flags & SWP_STATECHANGED) && (!data->iconic != !(new_style & WS_MINIMIZE)))
         {
-            set_wm_hints( data );
             data->iconic = (new_style & WS_MINIMIZE) != 0;
+            set_wm_hints( data );
             TRACE( "changing win %p iconic state to %u\n", data->hwnd, data->iconic );
             if (data->iconic)
                 XIconifyWindow( data->display, data->whole_window, data->vis.screen );
