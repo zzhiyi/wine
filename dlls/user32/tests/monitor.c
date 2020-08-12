@@ -297,8 +297,6 @@ static void _expect_dm(INT line, DEVMODEA expected, const CHAR *device, DWORD te
 
     ok_(__FILE__, line)((dm.dmFields & expected.dmFields) == expected.dmFields,
             "Device %s test %d expect dmFields to contain %#x, got %#x\n", device, test, expected.dmFields, dm.dmFields);
-    /* Wine doesn't support changing color depth yet */
-    todo_wine_if(expected.dmFields & DM_BITSPERPEL && expected.dmBitsPerPel != 32 && expected.dmBitsPerPel != 24)
     ok_(__FILE__, line)(!(expected.dmFields & DM_BITSPERPEL) || dm.dmBitsPerPel == expected.dmBitsPerPel,
             "Device %s test %d expect dmBitsPerPel %u, got %u\n", device, test, expected.dmBitsPerPel, dm.dmBitsPerPel);
     ok_(__FILE__, line)(!(expected.dmFields & DM_PELSWIDTH) || dm.dmPelsWidth == expected.dmPelsWidth,
