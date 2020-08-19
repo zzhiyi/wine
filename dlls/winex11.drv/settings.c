@@ -36,16 +36,6 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(x11settings);
 
-struct x11drv_display_setting
-{
-    ULONG_PTR id;
-    BOOL placed;
-    RECT new_rect;
-    RECT old_rect;
-    RECT desired_rect;
-    DEVMODEW desired_mode;
-};
-
 /* All Windows drivers seen so far either support 32 bit depths, or 24 bit depths, but never both. So if we have
  * a 32 bit framebuffer, report 32 bit bpps, otherwise 24 bit ones.
  */
@@ -179,6 +169,7 @@ void X11DRV_Settings_Init(void)
     nores_handler.free_modes = nores_free_modes;
     nores_handler.get_current_mode = nores_get_current_mode;
     nores_handler.set_current_mode = nores_set_current_mode;
+    nores_handler.convert_coordinates = NULL;
     X11DRV_Settings_SetHandler(&nores_handler);
 }
 
@@ -741,7 +732,6 @@ static POINT get_placement_offset(const struct x11drv_display_setting *displays,
 
 static void place_all_displays(struct x11drv_display_setting *displays, INT display_count)
 {
-    INT left = INT_MAX, top = INT_MAX;
     INT placing_idx, display_idx;
     POINT min_offset, offset;
 
@@ -776,16 +766,10 @@ static void place_all_displays(struct x11drv_display_setting *displays, INT disp
     {
         displays[display_idx].desired_mode.u1.s2.dmPosition.x = displays[display_idx].new_rect.left;
         displays[display_idx].desired_mode.u1.s2.dmPosition.y = displays[display_idx].new_rect.top;
-        left = min(left, displays[display_idx].desired_mode.u1.s2.dmPosition.x);
-        top = min(top, displays[display_idx].desired_mode.u1.s2.dmPosition.y);
     }
 
-    /* Convert virtual screen coordinates to root coordinates */
-    for (display_idx = 0; display_idx < display_count; ++display_idx)
-    {
-        displays[display_idx].desired_mode.u1.s2.dmPosition.x -= left;
-        displays[display_idx].desired_mode.u1.s2.dmPosition.y -= top;
-    }
+    if (handler.convert_coordinates)
+        handler.convert_coordinates(displays, display_count);
 }
 
 static LONG apply_display_settings(struct x11drv_display_setting *displays, INT display_count, BOOL do_attach)

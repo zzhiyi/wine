@@ -854,6 +854,7 @@ void fs_hack_init(void)
     settings_handler.free_modes = fs_free_modes;
     settings_handler.get_current_mode = fs_get_current_mode;
     settings_handler.set_current_mode = fs_set_current_mode;
+    settings_handler.convert_coordinates = NULL;
     X11DRV_Settings_SetHandler(&settings_handler);
 
     device_handler.name = "Fullscreen Hack";
