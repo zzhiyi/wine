@@ -867,6 +867,4 @@ void fs_hack_init(void)
     device_handler.free_monitors = real_device_handler.free_monitors;
     device_handler.register_event_handlers = NULL;
     X11DRV_DisplayDevices_SetHandler(&device_handler);
-
-    X11DRV_DisplayDevices_Init(TRUE);
 }
