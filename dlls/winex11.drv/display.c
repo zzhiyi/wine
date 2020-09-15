@@ -115,6 +115,7 @@ struct x11drv_display_device_handler desktop_handler;
 static HKEY video_key;
 static RECT virtual_screen_rect;
 static RECT primary_monitor_rect;
+static RECT primary_work_area_rect;
 static FILETIME last_query_screen_time;
 static CRITICAL_SECTION screen_section;
 static CRITICAL_SECTION_DEBUG screen_critsect_debug =
@@ -143,7 +144,7 @@ void release_display_device_init_mutex(HANDLE mutex)
 /* Update screen rectangle cache from SetupAPI if it's outdated, return FALSE on failure and TRUE on success */
 static BOOL update_screen_cache(void)
 {
-    RECT virtual_rect = {0}, primary_rect = {0}, monitor_rect;
+    RECT virtual_rect = {0}, primary_rect = {0}, work_area = {0}, rect;
     SP_DEVINFO_DATA device_data = {sizeof(device_data)};
     HDEVINFO devinfo = INVALID_HANDLE_VALUE;
     FILETIME filetime = {0};
@@ -174,17 +175,25 @@ static BOOL update_screen_cache(void)
     while (SetupDiEnumDeviceInfo(devinfo, i++, &device_data))
     {
         if (!SetupDiGetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, &type,
-                                       (BYTE *)&monitor_rect, sizeof(monitor_rect), NULL, 0))
+                                       (BYTE *)&rect, sizeof(rect), NULL, 0))
             goto fail;
 
-        UnionRect(&virtual_rect, &virtual_rect, &monitor_rect);
+        UnionRect(&virtual_rect, &virtual_rect, &rect);
         if (i == 1)
-            primary_rect = monitor_rect;
+        {
+            primary_rect = rect;
+
+            if (!SetupDiGetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCWORK,
+                                           &type, (BYTE *)&rect, sizeof(rect), NULL, 0))
+                goto fail;
+            work_area = rect;
+        }
     }
 
     EnterCriticalSection(&screen_section);
     virtual_screen_rect = virtual_rect;
     primary_monitor_rect = primary_rect;
+    primary_work_area_rect = work_area;
     last_query_screen_time = filetime;
     LeaveCriticalSection(&screen_section);
     ret = TRUE;
@@ -236,6 +245,42 @@ RECT get_primary_monitor_rect(void)
     primary = primary_monitor_rect;
     LeaveCriticalSection(&screen_section);
     return primary;
+}
+
+RECT get_primary_work_area(void)
+{
+    RECT work_area;
+
+    update_screen_cache();
+    EnterCriticalSection(&screen_section);
+    work_area = primary_work_area_rect;
+    LeaveCriticalSection(&screen_section);
+    return work_area;
+}
+
+BOOL set_primary_work_area(const RECT *work_area)
+{
+    SP_DEVINFO_DATA device_data = {sizeof(device_data)};
+    HDEVINFO devinfo;
+    HANDLE mutex;
+    BOOL ret = FALSE;
+
+    mutex = get_display_device_init_mutex();
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MONITOR, displayW, NULL, DIGCF_PRESENT);
+    SetupDiEnumDeviceInfo(devinfo, 0, &device_data);
+    if (SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCWORK,
+                                  DEVPROP_TYPE_BINARY, (const BYTE *)work_area, sizeof(*work_area), 0))
+    {
+        EnterCriticalSection(&screen_section);
+        primary_work_area_rect = *work_area;
+        LeaveCriticalSection(&screen_section);
+        ret = TRUE;
+    }
+    SetupDiDestroyDeviceInfoList(devinfo);
+    release_display_device_init_mutex(mutex);
+    if (!ret)
+        WARN("overriding the primary work area to %s failed!\n", wine_dbgstr_rect(work_area));
+    return ret;
 }
 
 /* Get the primary monitor rect from the host system */
@@ -691,6 +736,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
     INT gpu_count, adapter_count, monitor_count;
     INT gpu, adapter, monitor;
     HDEVINFO gpu_devinfo = NULL, monitor_devinfo = NULL;
+    RECT primary_work_area = {0}, primary_rect = {0};
     HKEY video_hkey = NULL;
     INT video_index = 0;
     DWORD disposition = 0;
@@ -714,6 +760,13 @@ void X11DRV_DisplayDevices_Init(BOOL force)
 
     TRACE("via %s\n", wine_dbgstr_a(handler->name));
 
+    /* Get old primary monitor rectangle and primary work area only if they are valid and not from
+     * the last boot */
+    if (disposition != REG_CREATED_NEW_KEY)
+    {
+        primary_rect = get_primary_monitor_rect();
+        primary_work_area = get_primary_work_area();
+    }
     prepare_devices(video_hkey);
 
     gpu_devinfo = SetupDiCreateDeviceInfoList(&GUID_DEVCLASS_DISPLAY, NULL);
@@ -750,6 +803,14 @@ void X11DRV_DisplayDevices_Init(BOOL force)
                 TRACE("monitor: %#x %s\n", monitor, wine_dbgstr_w(monitors[monitor].name));
                 if (!X11DRV_InitMonitor(monitor_devinfo, &monitors[monitor], monitor, video_index, &gpu_luid, output_id++))
                     goto done;
+
+                /* Override work area if it was set by SystemParametersInfo(SPI_SETWORKAREA) */
+                if (video_index == 0 && EqualRect(&primary_rect, &monitors[monitor].rc_monitor) &&
+                    !EqualRect(&monitors[monitor].rc_work, &primary_work_area))
+                {
+                    TRACE("Using custom work area %s.\n", wine_dbgstr_rect(&primary_work_area));
+                    set_primary_work_area(&primary_work_area);
+                }
             }
 
             handler->free_monitors(monitors);

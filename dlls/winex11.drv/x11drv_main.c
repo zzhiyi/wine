@@ -757,6 +757,25 @@ BOOL CDECL X11DRV_SystemParametersInfo( UINT action, UINT int_param, void *ptr_p
             XUnlockDisplay( gdi_display );
         }
         break;
+    case SPI_SETWORKAREA:
+        if (ptr_param)
+        {
+            TRACE("setting primary work area to %s.\n", wine_dbgstr_rect(ptr_param));
+            if (set_primary_work_area(ptr_param))
+            {
+                X11DRV_DisplayDevices_Init(TRUE);
+                return TRUE;
+            }
+        }
+        break;
+    case SPI_GETWORKAREA:
+        if (ptr_param)
+        {
+            *(RECT *)ptr_param = get_primary_work_area();
+            TRACE("work area %s\n", wine_dbgstr_rect(ptr_param));
+            return TRUE;
+        }
+        break;
     }
     return FALSE;  /* let user32 handle it */
 }
