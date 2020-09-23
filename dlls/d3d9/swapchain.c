@@ -351,9 +351,15 @@ static void STDMETHODCALLTYPE d3d9_swapchain_wined3d_object_released(void *paren
     heap_free(parent);
 }
 
-static const struct wined3d_parent_ops d3d9_swapchain_wined3d_parent_ops =
+static void STDMETHODCALLTYPE d3d9_swapchain_windowed_state_changed(void *parent, BOOL windowed)
+{
+    TRACE("parent %p, windowed %d.\n", parent, windowed);
+}
+
+static const struct wined3d_swapchain_parent_ops d3d9_swapchain_wined3d_parent_ops =
 {
     d3d9_swapchain_wined3d_object_released,
+    d3d9_swapchain_windowed_state_changed,
 };
 
 static HRESULT swapchain_init(struct d3d9_swapchain *swapchain, struct d3d9_device *device,

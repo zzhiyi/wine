@@ -3240,7 +3240,7 @@ struct wined3d_adapter_ops
     void (*adapter_copy_bo_address)(struct wined3d_context *context,
             const struct wined3d_bo_address *dst, const struct wined3d_bo_address *src, size_t size);
     HRESULT (*adapter_create_swapchain)(struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
-            void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_swapchain **swapchain);
+            void *parent, const struct wined3d_swapchain_parent_ops *parent_ops, struct wined3d_swapchain **swapchain);
     void (*adapter_destroy_swapchain)(struct wined3d_swapchain *swapchain);
     HRESULT (*adapter_create_buffer)(struct wined3d_device *device, const struct wined3d_buffer_desc *desc,
             const struct wined3d_sub_resource_data *data, void *parent, const struct wined3d_parent_ops *parent_ops,
@@ -5064,6 +5064,9 @@ struct wined3d_swapchain_state
     LONG style;
     LONG exstyle;
     HWND device_window;
+
+    void *swapchain_parent;
+    const struct wined3d_swapchain_parent_ops *swapchain_parent_ops;
 };
 
 void wined3d_swapchain_state_restore_from_fullscreen(struct wined3d_swapchain_state *state,
@@ -5082,7 +5085,7 @@ struct wined3d_swapchain
 {
     LONG ref;
     void *parent;
-    const struct wined3d_parent_ops *parent_ops;
+    const struct wined3d_swapchain_parent_ops *parent_ops;
     const struct wined3d_swapchain_ops *swapchain_ops;
     struct wined3d_device *device;
 
@@ -5111,7 +5114,7 @@ void swapchain_set_max_frame_latency(struct wined3d_swapchain *swapchain,
 
 HRESULT wined3d_swapchain_no3d_init(struct wined3d_swapchain *swapchain_no3d,
         struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
-        void *parent, const struct wined3d_parent_ops *parent_ops) DECLSPEC_HIDDEN;
+        void *parent, const struct wined3d_swapchain_parent_ops *parent_ops) DECLSPEC_HIDDEN;
 
 struct wined3d_swapchain_gl
 {
@@ -5136,7 +5139,7 @@ HDC wined3d_swapchain_gl_get_backup_dc(struct wined3d_swapchain_gl *swapchain_gl
 struct wined3d_context_gl *wined3d_swapchain_gl_get_context(struct wined3d_swapchain_gl *swapchain_gl) DECLSPEC_HIDDEN;
 HRESULT wined3d_swapchain_gl_init(struct wined3d_swapchain_gl *swapchain_gl,
         struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
-        void *parent, const struct wined3d_parent_ops *parent_ops) DECLSPEC_HIDDEN;
+        void *parent, const struct wined3d_swapchain_parent_ops *parent_ops) DECLSPEC_HIDDEN;
 
 struct wined3d_swapchain_vk
 {
@@ -5162,7 +5165,7 @@ static inline struct wined3d_swapchain_vk *wined3d_swapchain_vk(struct wined3d_s
 void wined3d_swapchain_vk_cleanup(struct wined3d_swapchain_vk *swapchain_vk) DECLSPEC_HIDDEN;
 HRESULT wined3d_swapchain_vk_init(struct wined3d_swapchain_vk *swapchain_vk,
         struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
-        void *parent, const struct wined3d_parent_ops *parent_ops) DECLSPEC_HIDDEN;
+        void *parent, const struct wined3d_swapchain_parent_ops *parent_ops) DECLSPEC_HIDDEN;
 
 /*****************************************************************************
  * Utility function prototypes

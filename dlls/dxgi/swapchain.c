@@ -806,9 +806,23 @@ static void STDMETHODCALLTYPE d3d11_swapchain_wined3d_object_released(void *pare
     heap_free(parent);
 }
 
-static const struct wined3d_parent_ops d3d11_swapchain_wined3d_parent_ops =
+static void STDMETHODCALLTYPE d3d11_swapchain_windowed_state_changed(void *parent, BOOL windowed)
+{
+    struct d3d11_swapchain *swapchain = parent;
+
+    TRACE("parent %p, windowed %d.\n", parent, windowed);
+
+    if (windowed && swapchain->target)
+    {
+        IDXGIOutput_Release(swapchain->target);
+        swapchain->target = NULL;
+    }
+}
+
+static const struct wined3d_swapchain_parent_ops d3d11_swapchain_wined3d_parent_ops =
 {
     d3d11_swapchain_wined3d_object_released,
+    d3d11_swapchain_windowed_state_changed,
 };
 
 HRESULT d3d11_swapchain_init(struct d3d11_swapchain *swapchain, struct dxgi_device *device,
@@ -2882,6 +2896,22 @@ static BOOL init_vk_funcs(struct dxgi_vk_funcs *dxgi, VkInstance vk_instance, Vk
     return TRUE;
 }
 
+static void STDMETHODCALLTYPE d3d12_swapchain_wined3d_object_released(void *parent)
+{
+    TRACE("parent %p.\n", parent);
+}
+
+static void STDMETHODCALLTYPE d3d12_swapchain_windowed_state_changed(void *parent, BOOL windowed)
+{
+    TRACE("parent %p, windowed %d.\n", parent, windowed);
+}
+
+static const struct wined3d_swapchain_parent_ops d3d12_swapchain_wined3d_parent_ops =
+{
+    d3d12_swapchain_wined3d_object_released,
+    d3d12_swapchain_windowed_state_changed,
+};
+
 static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGIFactory *factory,
         ID3D12Device *device, ID3D12CommandQueue *queue, HWND window,
         const DXGI_SWAP_CHAIN_DESC1 *swapchain_desc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC *fullscreen_desc)
@@ -2944,7 +2974,8 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
     IDXGIOutput_Release(output);
     if (FAILED(hr))
         return hr;
-    if (FAILED(hr = wined3d_swapchain_state_create(&wined3d_desc, window, &swapchain->state)))
+    if (FAILED(hr = wined3d_swapchain_state_create(&wined3d_desc, window, &swapchain,
+            &d3d12_swapchain_wined3d_parent_ops, &swapchain->state)))
         return hr;
 
     if (swapchain_desc->BufferUsage && swapchain_desc->BufferUsage != DXGI_USAGE_RENDER_TARGET_OUTPUT)

@@ -2194,6 +2194,12 @@ struct wined3d_parent_ops
     void (__stdcall *wined3d_object_destroyed)(void *parent);
 };
 
+struct wined3d_swapchain_parent_ops
+{
+    void (__stdcall *wined3d_object_destroyed)(void *parent);
+    void (__stdcall *windowed_state_changed)(void *parent, BOOL windowed);
+};
+
 struct wined3d;
 struct wined3d_adapter;
 struct wined3d_blend_state;
@@ -2760,7 +2766,8 @@ HRESULT __cdecl wined3d_stateblock_set_vs_consts_i(struct wined3d_stateblock *st
         unsigned int start_idx, unsigned int count, const struct wined3d_ivec4 *constants);
 
 HRESULT __cdecl wined3d_swapchain_create(struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
-        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_swapchain **swapchain);
+        void *parent, const struct wined3d_swapchain_parent_ops *parent_ops,
+        struct wined3d_swapchain **swapchain);
 ULONG __cdecl wined3d_swapchain_decref(struct wined3d_swapchain *swapchain);
 struct wined3d_texture * __cdecl wined3d_swapchain_get_back_buffer(const struct wined3d_swapchain *swapchain,
         UINT backbuffer_idx);
@@ -2789,7 +2796,8 @@ void __cdecl wined3d_swapchain_set_palette(struct wined3d_swapchain *swapchain, 
 void __cdecl wined3d_swapchain_set_window(struct wined3d_swapchain *swapchain, HWND window);
 
 HRESULT __cdecl wined3d_swapchain_state_create(const struct wined3d_swapchain_desc *desc,
-        HWND window, struct wined3d_swapchain_state **state);
+        HWND window, void *parent, const struct wined3d_swapchain_parent_ops *parent_ops,
+        struct wined3d_swapchain_state **state);
 void __cdecl wined3d_swapchain_state_destroy(struct wined3d_swapchain_state *state);
 HRESULT __cdecl wined3d_swapchain_state_resize_target(struct wined3d_swapchain_state *state,
         const struct wined3d_display_mode *mode);

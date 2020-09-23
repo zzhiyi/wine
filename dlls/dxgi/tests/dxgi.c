@@ -2502,7 +2502,7 @@ static void test_get_containing_output(IUnknown *device, BOOL is_d3d12)
         ok(hr == S_OK, "GetDesc failed, hr %#x.\n", hr);
         hr = IDXGIOutput_GetDesc(output2, &output_desc2);
         ok(hr == S_OK, "GetDesc failed, hr %#x.\n", hr);
-        todo_wine ok(!lstrcmpW(output_desc.DeviceName, output_desc2.DeviceName),
+        todo_wine_if(is_d3d12) ok(!lstrcmpW(output_desc.DeviceName, output_desc2.DeviceName),
                 "Expect device name %s, got %s.\n", wine_dbgstr_w(output_desc2.DeviceName),
                 wine_dbgstr_w(output_desc.DeviceName));
         IDXGIOutput_Release(output);
@@ -2514,7 +2514,7 @@ static void test_get_containing_output(IUnknown *device, BOOL is_d3d12)
         ok(hr == S_OK, "GetDesc failed, hr %#x.\n", hr);
         hr = IDXGIOutput_GetDesc(output2, &output_desc2);
         ok(hr == S_OK, "GetDesc failed, hr %#x.\n", hr);
-        todo_wine ok(!lstrcmpW(output_desc.DeviceName, output_desc2.DeviceName),
+        todo_wine_if(is_d3d12) ok(!lstrcmpW(output_desc.DeviceName, output_desc2.DeviceName),
                 "Expect device name %s, got %s.\n", wine_dbgstr_w(output_desc2.DeviceName),
                 wine_dbgstr_w(output_desc.DeviceName));
 

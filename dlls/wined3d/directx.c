@@ -2668,7 +2668,8 @@ static void adapter_no3d_copy_bo_address(struct wined3d_context *context,
 }
 
 static HRESULT adapter_no3d_create_swapchain(struct wined3d_device *device, struct wined3d_swapchain_desc *desc,
-        void *parent, const struct wined3d_parent_ops *parent_ops, struct wined3d_swapchain **swapchain)
+        void *parent, const struct wined3d_swapchain_parent_ops *parent_ops,
+        struct wined3d_swapchain **swapchain)
 {
     struct wined3d_swapchain *swapchain_no3d;
     HRESULT hr;
