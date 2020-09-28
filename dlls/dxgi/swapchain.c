@@ -1916,6 +1916,7 @@ static void d3d12_swapchain_destroy(struct d3d12_swapchain *swapchain)
 
     close_library(vulkan_module);
 
+    wined3d_unhook_swapchain_state(swapchain->state);
     wined3d_swapchain_state_destroy(swapchain->state);
 }
 
@@ -2903,7 +2904,18 @@ static void STDMETHODCALLTYPE d3d12_swapchain_wined3d_object_released(void *pare
 
 static void STDMETHODCALLTYPE d3d12_swapchain_windowed_state_changed(void *parent, BOOL windowed)
 {
-    TRACE("parent %p, windowed %d.\n", parent, windowed);
+    struct d3d12_swapchain *swapchain = parent;
+
+    FIXME("parent %p, windowed %d.\n", parent, windowed);
+
+//    if (windowed && swapchain->target)
+//    {
+//        FIXME("line:%d swapchain->target %p\n", __LINE__, swapchain->target);
+//        IDXGIOutput_Release(swapchain->target);
+//        FIXME("line:%d\n", __LINE__);
+//        swapchain->target = NULL;
+//        FIXME("line:%d\n", __LINE__);
+//    }
 }
 
 static const struct wined3d_swapchain_parent_ops d3d12_swapchain_wined3d_parent_ops =
@@ -2978,8 +2990,10 @@ static HRESULT d3d12_swapchain_init(struct d3d12_swapchain *swapchain, IWineDXGI
 
     dxgi_factory = unsafe_impl_from_IDXGIFactory((IDXGIFactory *)factory);
     if (FAILED(hr = wined3d_swapchain_state_create(dxgi_factory->wined3d, &wined3d_desc, window,
-            &swapchain, &d3d12_swapchain_wined3d_parent_ops, &swapchain->state)))
+            swapchain, &d3d12_swapchain_wined3d_parent_ops, &swapchain->state)))
         return hr;
+
+    wined3d_hook_swapchain_state(swapchain->state);
 
     if (swapchain_desc->BufferUsage && swapchain_desc->BufferUsage != DXGI_USAGE_RENDER_TARGET_OUTPUT)
         FIXME("Ignoring buffer usage %#x.\n", swapchain_desc->BufferUsage);

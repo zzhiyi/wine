@@ -578,10 +578,13 @@ static LRESULT CALLBACK wined3d_hook_proc(int code, WPARAM wparam, LPARAM lparam
     MSG *msg = (MSG *)lparam;
     unsigned int i;
 
+    FIXME("line:%d\n", __LINE__);
+
     /* Handle Alt+Enter. */
     if (code == HC_ACTION && msg->message == WM_SYSKEYDOWN
             && msg->wParam == VK_RETURN && (msg->lParam & (KF_ALTDOWN << 16)))
     {
+        FIXME("line:%d\n", __LINE__);
         wined3d_wndproc_mutex_lock();
 
         for (i = 0; i < hook_table.swapchain_count; ++i)
@@ -591,11 +594,13 @@ static LRESULT CALLBACK wined3d_hook_proc(int code, WPARAM wparam, LPARAM lparam
             if (state->device_window != msg->hwnd)
                 continue;
 
+            FIXME("line:%d\n", __LINE__);
             if ((entry = wined3d_find_wndproc(msg->hwnd, state->wined3d))
                     && (entry->flags & (WINED3D_REGISTER_WINDOW_NO_WINDOW_CHANGES
                     | WINED3D_REGISTER_WINDOW_NO_ALT_ENTER)))
                 continue;
 
+            FIXME("line:%d\n", __LINE__);
             swapchain_desc = state->desc;
             swapchain_desc.windowed = !swapchain_desc.windowed;
             if (!(output = wined3d_get_output_from_window(state->wined3d, state->device_window)))
@@ -770,7 +775,7 @@ static struct wined3d_window_hook *wined3d_find_hook(DWORD thread_id)
     return NULL;
 }
 
-void wined3d_hook_swapchain_state(struct wined3d_swapchain_state *state)
+void CDECL wined3d_hook_swapchain_state(struct wined3d_swapchain_state *state)
 {
     struct wined3d_hooked_swapchain_state *swapchain_entry;
     struct wined3d_window_hook *hook;
@@ -811,7 +816,7 @@ void wined3d_hook_swapchain_state(struct wined3d_swapchain_state *state)
     wined3d_wndproc_mutex_unlock();
 }
 
-void wined3d_unhook_swapchain_state(struct wined3d_swapchain_state *state)
+void CDECL wined3d_unhook_swapchain_state(struct wined3d_swapchain_state *state)
 {
     struct wined3d_hooked_swapchain_state *swapchain_entry, *last_swapchain_entry;
     struct wined3d_window_hook *hook, *last_hook;

@@ -7321,44 +7321,44 @@ START_TEST(dxgi)
             use_mt = FALSE;
     }
 
-    queue_test(test_adapter_desc);
-    queue_test(test_adapter_luid);
-    queue_test(test_query_video_memory_info);
-    queue_test(test_check_interface_support);
-    queue_test(test_create_surface);
-    queue_test(test_parents);
-    queue_test(test_output);
-    queue_test(test_find_closest_matching_mode);
-    queue_test(test_resize_target_wndproc);
-    queue_test(test_create_factory);
-    queue_test(test_private_data);
-    queue_test(test_maximum_frame_latency);
-    queue_test(test_output_desc);
-    queue_test(test_object_wrapping);
-    queue_test(test_factory_check_feature_support);
+//    queue_test(test_adapter_desc);
+//    queue_test(test_adapter_luid);
+//    queue_test(test_query_video_memory_info);
+//    queue_test(test_check_interface_support);
+//    queue_test(test_create_surface);
+//    queue_test(test_parents);
+//    queue_test(test_output);
+//    queue_test(test_find_closest_matching_mode);
+//    queue_test(test_resize_target_wndproc);
+//    queue_test(test_create_factory);
+//    queue_test(test_private_data);
+//    queue_test(test_maximum_frame_latency);
+//    queue_test(test_output_desc);
+//    queue_test(test_object_wrapping);
+//    queue_test(test_factory_check_feature_support);
 
-    run_queued_tests();
+//    run_queued_tests();
 
-    /* These tests use full-screen swapchains, so shouldn't run in parallel. */
-    test_create_swapchain();
-    test_default_fullscreen_target_output();
-    test_inexact_modes();
-    test_gamma_control();
-    test_multi_adapter();
-    test_swapchain_parameters();
-    test_swapchain_window_messages();
-    test_swapchain_window_styles();
-    run_on_d3d10(test_set_fullscreen);
-    run_on_d3d10(test_resize_target);
-    run_on_d3d10(test_swapchain_resize);
-    run_on_d3d10(test_swapchain_present);
-    run_on_d3d10(test_swapchain_backbuffer_index);
-    run_on_d3d10(test_swapchain_formats);
-    run_on_d3d10(test_output_ownership);
-    run_on_d3d10(test_cursor_clipping);
-    run_on_d3d10(test_mode_change);
-    run_on_d3d10(test_get_containing_output);
-    run_on_d3d10(test_window_association);
+//    /* These tests use full-screen swapchains, so shouldn't run in parallel. */
+//    test_create_swapchain();
+//    test_default_fullscreen_target_output();
+//    test_inexact_modes();
+//    test_gamma_control();
+//    test_multi_adapter();
+//    test_swapchain_parameters();
+//    test_swapchain_window_messages();
+//    test_swapchain_window_styles();
+//    run_on_d3d10(test_set_fullscreen);
+//    run_on_d3d10(test_resize_target);
+//    run_on_d3d10(test_swapchain_resize);
+//    run_on_d3d10(test_swapchain_present);
+//    run_on_d3d10(test_swapchain_backbuffer_index);
+//    run_on_d3d10(test_swapchain_formats);
+//    run_on_d3d10(test_output_ownership);
+//    run_on_d3d10(test_cursor_clipping);
+//    run_on_d3d10(test_mode_change);
+//    run_on_d3d10(test_get_containing_output);
+//    run_on_d3d10(test_window_association);
 
     if (!(d3d12_module = LoadLibraryA("d3d12.dll")))
     {
@@ -7375,18 +7375,18 @@ START_TEST(dxgi)
         ID3D12Debug_Release(debug);
     }
 
-    run_on_d3d12(test_set_fullscreen);
-    run_on_d3d12(test_resize_target);
-    run_on_d3d12(test_swapchain_resize);
-    run_on_d3d12(test_swapchain_present);
-    run_on_d3d12(test_swapchain_backbuffer_index);
-    run_on_d3d12(test_swapchain_formats);
-    run_on_d3d12(test_output_ownership);
-    run_on_d3d12(test_cursor_clipping);
-    run_on_d3d12(test_frame_latency_event);
-    run_on_d3d12(test_colour_space_support);
-    run_on_d3d12(test_mode_change);
-    run_on_d3d12(test_get_containing_output);
+//    run_on_d3d12(test_set_fullscreen);
+//    run_on_d3d12(test_resize_target);
+//    run_on_d3d12(test_swapchain_resize);
+//    run_on_d3d12(test_swapchain_present);
+//    run_on_d3d12(test_swapchain_backbuffer_index);
+//    run_on_d3d12(test_swapchain_formats);
+//    run_on_d3d12(test_output_ownership);
+//    run_on_d3d12(test_cursor_clipping);
+//    run_on_d3d12(test_frame_latency_event);
+//    run_on_d3d12(test_colour_space_support);
+//    run_on_d3d12(test_mode_change);
+//    run_on_d3d12(test_get_containing_output);
     run_on_d3d12(test_window_association);
 
     FreeLibrary(d3d12_module);
