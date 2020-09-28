@@ -3513,9 +3513,9 @@ struct wined3d
 };
 
 BOOL wined3d_filter_messages(HWND window, BOOL filter) DECLSPEC_HIDDEN;
-void wined3d_hook_swapchain(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
+void wined3d_hook_swapchain_state(struct wined3d_swapchain_state *state) DECLSPEC_HIDDEN;
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags) DECLSPEC_HIDDEN;
-void wined3d_unhook_swapchain(struct wined3d_swapchain *swapchain) DECLSPEC_HIDDEN;
+void wined3d_unhook_swapchain_state(struct wined3d_swapchain_state *state) DECLSPEC_HIDDEN;
 void wined3d_unregister_window(HWND window) DECLSPEC_HIDDEN;
 
 BOOL wined3d_get_app_name(char *app_name, unsigned int app_name_size) DECLSPEC_HIDDEN;
@@ -5065,6 +5065,8 @@ struct wined3d_swapchain_state
     LONG exstyle;
     HWND device_window;
 
+    /*  */
+    struct wined3d *wined3d;
     void *swapchain_parent;
     const struct wined3d_swapchain_parent_ops *swapchain_parent_ops;
 };
