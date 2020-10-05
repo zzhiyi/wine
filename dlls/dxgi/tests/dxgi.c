@@ -2095,7 +2095,7 @@ done:
     DestroyWindow(creation_desc.OutputWindow);
 }
 
-static void test_get_containing_output(void)
+static void test_get_containing_output(IUnknown *device, BOOL is_d3d12)
 {
     unsigned int adapter_idx, output_idx, output_count;
     DXGI_OUTPUT_DESC output_desc, output_desc2;
@@ -2106,7 +2106,6 @@ static void test_get_containing_output(void)
     IDXGIFactory *factory;
     IDXGIAdapter *adapter;
     POINT points[4 * 16];
-    IDXGIDevice *device;
     unsigned int i, j;
     HMONITOR monitor;
     BOOL fullscreen;
@@ -2114,17 +2113,21 @@ static void test_get_containing_output(void)
     HRESULT hr;
     BOOL ret;
 
-    if (!(device = create_device(0)))
+    adapter = get_adapter(device, is_d3d12);
+    if (!adapter)
     {
-        skip("Failed to create device.\n");
+        skip("Failed to get adapter on Direct3D %d.\n", is_d3d12 ? 12 : 10);
         return;
     }
 
-    hr = IDXGIDevice_GetAdapter(device, &adapter);
-    ok(SUCCEEDED(hr), "GetAdapter failed, hr %#x.\n", hr);
-
-    hr = IDXGIAdapter_GetParent(adapter, &IID_IDXGIFactory, (void **)&factory);
-    ok(SUCCEEDED(hr), "GetParent failed, hr %#x.\n", hr);
+    output_count = 0;
+    while ((hr = IDXGIAdapter_EnumOutputs(adapter, output_count, &output)) != DXGI_ERROR_NOT_FOUND)
+    {
+        ok(SUCCEEDED(hr), "Failed to enumerate output %u, hr %#x.\n", output_count, hr);
+        IDXGIOutput_Release(output);
+        ++output_count;
+    }
+    IDXGIAdapter_Release(adapter);
 
     swapchain_desc.BufferDesc.Width = 100;
     swapchain_desc.BufferDesc.Height = 100;
@@ -2136,23 +2139,15 @@ static void test_get_containing_output(void)
     swapchain_desc.SampleDesc.Count = 1;
     swapchain_desc.SampleDesc.Quality = 0;
     swapchain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapchain_desc.BufferCount = 1;
+    swapchain_desc.BufferCount = is_d3d12 ? 2 : 1;
     swapchain_desc.OutputWindow = CreateWindowA("static", "dxgi_test",
             WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 100, 100, 0, 0, 0, 0);
     swapchain_desc.Windowed = TRUE;
-    swapchain_desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    swapchain_desc.SwapEffect = is_d3d12 ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
     swapchain_desc.Flags = 0;
 
-    output_count = 0;
-    while (IDXGIAdapter_EnumOutputs(adapter, output_count, &output) != DXGI_ERROR_NOT_FOUND)
-    {
-        ok(SUCCEEDED(hr), "Failed to enumerate output %u, hr %#x.\n", output_count, hr);
-        IDXGIOutput_Release(output);
-        ++output_count;
-    }
-    IDXGIAdapter_Release(adapter);
-
-    hr = IDXGIFactory_CreateSwapChain(factory, (IUnknown *)device, &swapchain_desc, &swapchain);
+    get_factory(device, is_d3d12, &factory);
+    hr = IDXGIFactory_CreateSwapChain(factory, device, &swapchain_desc, &swapchain);
     ok(SUCCEEDED(hr), "CreateSwapChain failed, hr %#x.\n", hr);
 
     monitor = MonitorFromWindow(swapchain_desc.OutputWindow, 0);
@@ -2403,7 +2398,7 @@ static void test_get_containing_output(void)
         flush_events();
         hr = IDXGISwapChain_GetFullscreenState(swapchain, &fullscreen, NULL);
         ok(hr == S_OK, "GetFullscreenState failed, hr %#x.\n", hr);
-        ok(!fullscreen, "Expect swapchain not full screen.\n");
+        todo_wine_if(is_d3d12) ok(!fullscreen, "Expect swapchain not full screen.\n");
 
         /* Move the swapchain output window to the second output */
         hr = IDXGIOutput_GetDesc(output2, &output_desc2);
@@ -2457,10 +2452,8 @@ static void test_get_containing_output(void)
 done:
     refcount = IDXGISwapChain_Release(swapchain);
     ok(!refcount, "IDXGISwapChain has %u references left.\n", refcount);
-    refcount = IDXGIDevice_Release(device);
-    ok(!refcount, "Device has %u references left.\n", refcount);
     refcount = IDXGIFactory_Release(factory);
-    ok(!refcount, "Factory has %u references left.\n", refcount);
+    ok(refcount == !is_d3d12, "IDXGIFactory has %u references left.\n", refcount);
     DestroyWindow(swapchain_desc.OutputWindow);
 }
 
@@ -6884,7 +6877,6 @@ START_TEST(dxgi)
     test_default_fullscreen_target_output();
     test_inexact_modes();
     test_gamma_control();
-    test_get_containing_output();
     test_multi_adapter();
     test_swapchain_parameters();
     test_swapchain_window_messages();
@@ -6898,6 +6890,7 @@ START_TEST(dxgi)
     run_on_d3d10(test_swapchain_formats);
     run_on_d3d10(test_output_ownership);
     run_on_d3d10(test_cursor_clipping);
+    run_on_d3d10(test_get_containing_output);
 
     if (!(d3d12_module = LoadLibraryA("d3d12.dll")))
     {
@@ -6924,6 +6917,7 @@ START_TEST(dxgi)
     run_on_d3d12(test_cursor_clipping);
     run_on_d3d12(test_frame_latency_event);
     run_on_d3d12(test_colour_space_support);
+    run_on_d3d12(test_get_containing_output);
 
     FreeLibrary(d3d12_module);
 }
