@@ -5411,7 +5411,7 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &devmode);
     ok(ret, "Failed to get display mode.\n");
-    todo_wine ok(devmode.dmPelsWidth == registry_mode.dmPelsWidth
+    ok(devmode.dmPelsWidth == registry_mode.dmPelsWidth
             && devmode.dmPelsHeight == registry_mode.dmPelsHeight,
             "Expected resolution %ux%u, got %ux%u.\n",
             registry_mode.dmPelsWidth, registry_mode.dmPelsHeight, devmode.dmPelsWidth, devmode.dmPelsHeight);
@@ -5484,7 +5484,7 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(equal_mode_rect(&devmode2, &devmode), "Got a different mode.\n");
+    ok(equal_mode_rect(&devmode2, &devmode), "Got a different mode.\n");
     ret = EnumDisplaySettingsW(NULL, ENUM_REGISTRY_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
     ok(equal_mode_rect(&devmode2, &devmode), "Got a different mode.\n");
@@ -5519,7 +5519,7 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(equal_mode_rect(&devmode2, &devmode), "Got a different mode.\n");
+    ok(equal_mode_rect(&devmode2, &devmode), "Got a different mode.\n");
     ret = EnumDisplaySettingsW(NULL, ENUM_REGISTRY_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
     ok(equal_mode_rect(&devmode2, &devmode), "Got a different mode.\n");
@@ -5602,15 +5602,15 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
+    ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_REGISTRY_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
     ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     hr = IDirect3D9_GetAdapterDisplayMode(d3d9, 1, &d3ddm);
     ok(hr == S_OK, "GetAdapterDisplayMode failed, hr %#x.\n", hr);
-    todo_wine ok(d3ddm.Width == old_devmode.dmPelsWidth, "Expected width %u, got %u.\n",
+    ok(d3ddm.Width == old_devmode.dmPelsWidth, "Expected width %u, got %u.\n",
             old_devmode.dmPelsWidth, d3ddm.Width);
-    todo_wine ok(d3ddm.Height == old_devmode.dmPelsHeight, "Expected height %u, got %u.\n",
+    ok(d3ddm.Height == old_devmode.dmPelsHeight, "Expected height %u, got %u.\n",
             old_devmode.dmPelsHeight, d3ddm.Height);
 
     refcount = IDirect3DDevice9_Release(device);
@@ -5635,15 +5635,15 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
+    ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_REGISTRY_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
     ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     hr = IDirect3D9_GetAdapterDisplayMode(d3d9, 1, &d3ddm);
     ok(hr == S_OK, "GetAdapterDisplayMode failed, hr %#x.\n", hr);
-    todo_wine ok(d3ddm.Width == old_devmode.dmPelsWidth, "Expected width %u, got %u.\n",
+    ok(d3ddm.Width == old_devmode.dmPelsWidth, "Expected width %u, got %u.\n",
             old_devmode.dmPelsWidth, d3ddm.Width);
-    todo_wine ok(d3ddm.Height == old_devmode.dmPelsHeight, "Expected height %u, got %u.\n",
+    ok(d3ddm.Height == old_devmode.dmPelsHeight, "Expected height %u, got %u.\n",
             old_devmode.dmPelsHeight, d3ddm.Height);
     ret = restore_display_modes(original_modes, display_count);
     ok(ret, "Failed to restore display modes.\n");
@@ -5661,7 +5661,7 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(devmode2.dmPelsWidth == devmode.dmPelsWidth && devmode2.dmPelsHeight == devmode.dmPelsHeight,
+    ok(devmode2.dmPelsWidth == devmode.dmPelsWidth && devmode2.dmPelsHeight == devmode.dmPelsHeight,
             "Expected resolution %ux%u, got %ux%u.\n", devmode.dmPelsWidth, devmode.dmPelsHeight,
             devmode2.dmPelsWidth, devmode2.dmPelsHeight);
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_REGISTRY_SETTINGS, &devmode2);
@@ -5671,7 +5671,7 @@ static void test_mode_change(void)
             devmode2.dmPelsWidth, devmode2.dmPelsHeight);
     hr = IDirect3D9_GetAdapterDisplayMode(d3d9, 1, &d3ddm);
     ok(hr == S_OK, "GetAdapterDisplayMode failed, hr %#x.\n", hr);
-    todo_wine ok(d3ddm.Width == devmode.dmPelsWidth && d3ddm.Height == devmode.dmPelsHeight,
+    ok(d3ddm.Width == devmode.dmPelsWidth && d3ddm.Height == devmode.dmPelsHeight,
             "Expected resolution %ux%u, got %ux%u.\n", devmode.dmPelsWidth, devmode.dmPelsHeight,
             d3ddm.Width, d3ddm.Height);
     ret = restore_display_modes(original_modes, display_count);
@@ -5698,13 +5698,13 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
+    ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_REGISTRY_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
     ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     hr = IDirect3D9_GetAdapterDisplayMode(d3d9, 1, &d3ddm);
     ok(hr == S_OK, "GetAdapterDisplayMode failed, hr %#x.\n", hr);
-    todo_wine ok(d3ddm.Width == old_devmode.dmPelsWidth && d3ddm.Height == old_devmode.dmPelsHeight,
+    ok(d3ddm.Width == old_devmode.dmPelsWidth && d3ddm.Height == old_devmode.dmPelsHeight,
             "Expected resolution %ux%u, got %ux%u.\n", old_devmode.dmPelsWidth,
             old_devmode.dmPelsHeight, d3ddm.Width, d3ddm.Height);
 
@@ -5730,13 +5730,13 @@ static void test_mode_change(void)
 
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_CURRENT_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
-    todo_wine ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
+    ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     ret = EnumDisplaySettingsW(second_monitor_name, ENUM_REGISTRY_SETTINGS, &devmode2);
     ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
     ok(equal_mode_rect(&devmode2, &old_devmode), "Got a different mode.\n");
     hr = IDirect3D9_GetAdapterDisplayMode(d3d9, 1, &d3ddm);
     ok(hr == S_OK, "GetAdapterDisplayMode failed, hr %#x.\n", hr);
-    todo_wine ok(d3ddm.Width == old_devmode.dmPelsWidth && d3ddm.Height == old_devmode.dmPelsHeight,
+    ok(d3ddm.Width == old_devmode.dmPelsWidth && d3ddm.Height == old_devmode.dmPelsHeight,
             "Expected resolution %ux%u, got %ux%u.\n", old_devmode.dmPelsWidth,
             old_devmode.dmPelsHeight, d3ddm.Width, d3ddm.Height);
 
