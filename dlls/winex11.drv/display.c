@@ -34,6 +34,7 @@
 #define WIN32_NO_STATUS
 #include "winternl.h"
 #include "wine/debug.h"
+#include "wine/server.h"
 #include "wine/unicode.h"
 #include "x11drv.h"
 
@@ -47,7 +48,6 @@ DEFINE_DEVPROPKEY(DEVPROPKEY_MONITOR_OUTPUT_ID, 0xca085853, 0x16ce, 0x48aa, 0xb1
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_GPU_VULKAN_UUID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5c, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
-DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCWORK, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 4);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 5);
 
 static const WCHAR driver_date_dataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
@@ -586,6 +586,7 @@ static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *mo
 {
     SP_DEVINFO_DATA device_data = {sizeof(SP_DEVINFO_DATA)};
     WCHAR bufferW[MAX_PATH];
+    DWORD size;
     HKEY hkey;
     BOOL ret = FALSE;
 
@@ -624,15 +625,32 @@ static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *mo
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, DEVPROP_TYPE_BINARY,
                                    (const BYTE *)&monitor->rc_monitor, sizeof(monitor->rc_monitor), 0))
         goto done;
-    /* RcWork */
-    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCWORK, DEVPROP_TYPE_BINARY,
-                                   (const BYTE *)&monitor->rc_work, sizeof(monitor->rc_work), 0))
-        goto done;
     /* Adapter name */
     sprintfW(bufferW, adapter_name_fmtW, video_index + 1);
+    size = (strlenW(bufferW) + 1) * sizeof(WCHAR);
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, DEVPROP_TYPE_STRING,
-                                   (const BYTE *)bufferW, (strlenW(bufferW) + 1) * sizeof(WCHAR), 0))
+                                   (const BYTE *)bufferW, size, 0))
         goto done;
+
+    /* EnumDisplayMonitors() doesn't enumerate mirrored replicas and inactive monitors */
+    if (monitor_index == 0 && monitor->state_flags & DISPLAY_DEVICE_ACTIVE)
+    {
+        SERVER_START_REQ(create_monitor)
+        {
+            req->monitor_rect.top = monitor->rc_monitor.top;
+            req->monitor_rect.left = monitor->rc_monitor.left;
+            req->monitor_rect.right = monitor->rc_monitor.right;
+            req->monitor_rect.bottom = monitor->rc_monitor.bottom;
+            req->work_rect.top = monitor->rc_work.top;
+            req->work_rect.left = monitor->rc_work.left;
+            req->work_rect.right = monitor->rc_work.right;
+            req->work_rect.bottom = monitor->rc_work.bottom;
+            wine_server_add_data(req, bufferW, size);
+            if (wine_server_call(req))
+                goto done;
+        }
+        SERVER_END_REQ;
+    }
 
     ret = TRUE;
 done:
@@ -645,7 +663,9 @@ static void prepare_devices(HKEY video_hkey)
 {
     static const BOOL not_present = FALSE;
     SP_DEVINFO_DATA device_data = {sizeof(device_data)};
+    HMONITOR monitor = NULL;
     HDEVINFO devinfo;
+    NTSTATUS status;
     DWORD i = 0;
 
     /* Remove all monitors */
@@ -656,6 +676,28 @@ static void prepare_devices(HKEY video_hkey)
             ERR("Failed to remove monitor\n");
     }
     SetupDiDestroyDeviceInfoList(devinfo);
+
+    while (TRUE)
+    {
+        SERVER_START_REQ(enum_monitor)
+        {
+            req->index = 0;
+            if (!(status = wine_server_call(req)))
+                monitor = wine_server_ptr_handle(reply->handle);
+        }
+        SERVER_END_REQ;
+
+        if (status)
+            break;
+
+        SERVER_START_REQ(destroy_monitor)
+        {
+            req->handle = wine_server_user_handle(monitor);
+            if (wine_server_call(req))
+                ERR("Failed to destroy monitor.\n");
+        }
+        SERVER_END_REQ;
+    }
 
     /* Clean up old adapter keys for reinitialization */
     RegDeleteTreeW(video_hkey, NULL);

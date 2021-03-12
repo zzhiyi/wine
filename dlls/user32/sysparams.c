@@ -46,6 +46,7 @@
 #include "win.h"
 #include "user_private.h"
 #include "wine/gdi_driver.h"
+#include "wine/server.h"
 #include "wine/asm.h"
 #include "wine/debug.h"
 
@@ -3869,8 +3870,30 @@ fail:
 BOOL CDECL nulldrv_GetMonitorInfo( HMONITOR handle, MONITORINFO *info )
 {
     UINT index = (UINT_PTR)handle - 1;
+    WCHAR adapter_name[CCHDEVICENAME];
 
     TRACE("(%p, %p)\n", handle, info);
+
+    SERVER_START_REQ( get_monitor_info )
+    {
+        req->handle = wine_server_user_handle( handle );
+        wine_server_set_reply( req, adapter_name, sizeof(adapter_name) );
+        if (!wine_server_call( req ))
+        {
+            SetRect( &info->rcMonitor, reply->monitor_rect.left, reply->monitor_rect.top,
+                     reply->monitor_rect.right, reply->monitor_rect.bottom );
+            SetRect( &info->rcWork, reply->work_rect.left, reply->work_rect.top,
+                     reply->work_rect.right, reply->work_rect.bottom );
+            if (!IsRectEmpty( &info->rcMonitor ) && !info->rcMonitor.top && !info->rcMonitor.left)
+                info->dwFlags = MONITORINFOF_PRIMARY;
+            else
+                info->dwFlags = 0;
+            if (info->cbSize >= sizeof(MONITORINFOEXW))
+                lstrcpyW( ((MONITORINFOEXW *)info)->szDevice, adapter_name );
+            return TRUE;
+        }
+    }
+    SERVER_END_REQ;
 
     /* Fallback to report one monitor */
     if (handle == NULLDRV_DEFAULT_HMONITOR)
@@ -3885,7 +3908,10 @@ BOOL CDECL nulldrv_GetMonitorInfo( HMONITOR handle, MONITORINFO *info )
     }
 
     if (!update_monitor_cache())
+    {
+        SetLastError( ERROR_INVALID_MONITOR_HANDLE );
         return FALSE;
+    }
 
     EnterCriticalSection( &monitors_section );
     if (index < monitor_count)
@@ -4006,10 +4032,44 @@ static BOOL CALLBACK enum_mon_callback( HMONITOR monitor, HDC hdc, LPRECT rect, 
 
 BOOL CDECL nulldrv_EnumDisplayMonitors( HDC hdc, RECT *rect, MONITORENUMPROC proc, LPARAM lp )
 {
+    HMONITOR monitor = NULL;
     RECT monitor_rect;
+    NTSTATUS status;
+    HANDLE mutex;
     DWORD i = 0;
 
     TRACE("(%p, %p, %p, 0x%lx)\n", hdc, rect, proc, lp);
+
+    mutex = get_display_device_init_mutex();
+    while (TRUE)
+    {
+        SERVER_START_REQ( enum_monitor )
+        {
+            req->index = i;
+            if (!(status = wine_server_call( req )))
+            {
+                SetRect( &monitor_rect, reply->monitor_rect.left, reply->monitor_rect.top,
+                         reply->monitor_rect.right, reply->monitor_rect.bottom );
+                monitor = wine_server_ptr_handle( reply->handle );
+            }
+        }
+        SERVER_END_REQ;
+
+        if (status)
+            break;
+
+        ++i;
+        release_display_device_init_mutex( mutex );
+
+        if (!proc( monitor, hdc, &monitor_rect, lp ))
+            return FALSE;
+
+        mutex = get_display_device_init_mutex();
+    }
+    release_display_device_init_mutex( mutex );
+
+    if (i)
+        return TRUE;
 
     if (update_monitor_cache())
     {

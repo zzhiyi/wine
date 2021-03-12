@@ -2681,6 +2681,41 @@ enum coords_relative
 #define SET_USER_OBJECT_GET_FULL_NAME   2
 
 
+/* Create a monitor */
+@REQ(create_monitor)
+    rectangle_t   monitor_rect;   /* monitor rectangle */
+    rectangle_t   work_rect;      /* monitor work area rectangle */
+    VARARG(adapter,unicode_str);  /* adapter name */
+@REPLY
+    user_handle_t handle;         /* handle to the monitor */
+@END
+
+
+/* Get information about a monitor */
+@REQ(get_monitor_info)
+    user_handle_t handle;         /* handle to the monitor */
+@REPLY
+    rectangle_t   monitor_rect;   /* monitor rectangle */
+    rectangle_t   work_rect;      /* monitor work area rectangle */
+    VARARG(adapter,unicode_str);  /* adapter name */
+@END
+
+
+/* Enumerate monitors */
+@REQ(enum_monitor)
+    unsigned int  index;          /* current index */
+@REPLY
+    user_handle_t handle;         /* handle to the monitor */
+    rectangle_t   monitor_rect;   /* monitor rectangle */
+@END
+
+
+/* Destroy a monitor */
+@REQ(destroy_monitor)
+    user_handle_t handle;         /* handle to the monitor */
+@END
+
+
 /* Register a hotkey */
 @REQ(register_hotkey)
     user_handle_t  window;        /* handle to the window */

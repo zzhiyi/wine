@@ -291,6 +291,10 @@ DECL_HANDLER(get_thread_desktop);
 DECL_HANDLER(set_thread_desktop);
 DECL_HANDLER(enum_desktop);
 DECL_HANDLER(set_user_object_info);
+DECL_HANDLER(create_monitor);
+DECL_HANDLER(get_monitor_info);
+DECL_HANDLER(enum_monitor);
+DECL_HANDLER(destroy_monitor);
 DECL_HANDLER(register_hotkey);
 DECL_HANDLER(unregister_hotkey);
 DECL_HANDLER(attach_thread_input);
@@ -570,6 +574,10 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_set_thread_desktop,
     (req_handler)req_enum_desktop,
     (req_handler)req_set_user_object_info,
+    (req_handler)req_create_monitor,
+    (req_handler)req_get_monitor_info,
+    (req_handler)req_enum_monitor,
+    (req_handler)req_destroy_monitor,
     (req_handler)req_register_hotkey,
     (req_handler)req_unregister_hotkey,
     (req_handler)req_attach_thread_input,
@@ -1680,6 +1688,23 @@ C_ASSERT( sizeof(struct set_user_object_info_request) == 24 );
 C_ASSERT( FIELD_OFFSET(struct set_user_object_info_reply, is_desktop) == 8 );
 C_ASSERT( FIELD_OFFSET(struct set_user_object_info_reply, old_obj_flags) == 12 );
 C_ASSERT( sizeof(struct set_user_object_info_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct create_monitor_request, monitor_rect) == 12 );
+C_ASSERT( FIELD_OFFSET(struct create_monitor_request, work_rect) == 28 );
+C_ASSERT( sizeof(struct create_monitor_request) == 48 );
+C_ASSERT( FIELD_OFFSET(struct create_monitor_reply, handle) == 8 );
+C_ASSERT( sizeof(struct create_monitor_reply) == 16 );
+C_ASSERT( FIELD_OFFSET(struct get_monitor_info_request, handle) == 12 );
+C_ASSERT( sizeof(struct get_monitor_info_request) == 16 );
+C_ASSERT( FIELD_OFFSET(struct get_monitor_info_reply, monitor_rect) == 8 );
+C_ASSERT( FIELD_OFFSET(struct get_monitor_info_reply, work_rect) == 24 );
+C_ASSERT( sizeof(struct get_monitor_info_reply) == 40 );
+C_ASSERT( FIELD_OFFSET(struct enum_monitor_request, index) == 12 );
+C_ASSERT( sizeof(struct enum_monitor_request) == 16 );
+C_ASSERT( FIELD_OFFSET(struct enum_monitor_reply, handle) == 8 );
+C_ASSERT( FIELD_OFFSET(struct enum_monitor_reply, monitor_rect) == 12 );
+C_ASSERT( sizeof(struct enum_monitor_reply) == 32 );
+C_ASSERT( FIELD_OFFSET(struct destroy_monitor_request, handle) == 12 );
+C_ASSERT( sizeof(struct destroy_monitor_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct register_hotkey_request, window) == 12 );
 C_ASSERT( FIELD_OFFSET(struct register_hotkey_request, id) == 16 );
 C_ASSERT( FIELD_OFFSET(struct register_hotkey_request, flags) == 20 );

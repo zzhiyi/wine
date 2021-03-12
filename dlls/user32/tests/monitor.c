@@ -1525,27 +1525,21 @@ static void test_EnumDisplayMonitors(void)
     HWINSTA winstation, old_winstation;
     HDESK desktop, old_desktop;
     INT count, old_count;
-    DWORD error;
     BOOL ret;
 
     ret = EnumDisplayMonitors(NULL, NULL, test_EnumDisplayMonitors_normal_cb, 0);
     ok(ret, "EnumDisplayMonitors failed, error %#x.\n", GetLastError());
 
-    SetLastError(0xdeadbeef);
     ret = EnumDisplayMonitors(NULL, NULL, test_EnumDisplayMonitors_return_false_cb, 0);
-    error = GetLastError();
     ok(!ret, "EnumDisplayMonitors succeeded.\n");
-    ok(error == 0xdeadbeef, "Expected error %#x, got %#x.\n", 0xdeadbeef, error);
 
     count = GetSystemMetrics(SM_CMONITORS);
     SetLastError(0xdeadbeef);
     ret = EnumDisplayMonitors(NULL, NULL, test_EnumDisplayMonitors_invalid_handle_cb, 0);
-    error = GetLastError();
     if (count >= 2)
         todo_wine ok(!ret, "EnumDisplayMonitors succeeded.\n");
     else
-        ok(ret, "EnumDisplayMonitors failed.\n");
-    ok(error == 0xdeadbeef, "Expected error %#x, got %#x.\n", 0xdeadbeef, error);
+        ok(ret, "EnumDisplayMonitors failed, error %#x.\n", GetLastError());
 
     /* Test that monitor enumeration is not affected by window stations and desktops */
     old_winstation = GetProcessWindowStation();
@@ -1965,7 +1959,6 @@ static BOOL CALLBACK test_handle_proc(HMONITOR full_monitor, HDC hdc, LPRECT rec
         monitor = (HMONITOR)((ULONG_PTR)full_monitor | ((ULONG_PTR)~0u << 16));
     SetLastError(0xdeadbeef);
     ret = GetMonitorInfoW(monitor, &monitor_info);
-    todo_wine_if(((ULONG_PTR)full_monitor >> 16) == 0)
     ok(ret, "GetMonitorInfoW failed, error %#x.\n", GetLastError());
 
     monitor = (HMONITOR)((ULONG_PTR)full_monitor & 0xffff);
