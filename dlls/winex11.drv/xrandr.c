@@ -1120,7 +1120,8 @@ static BOOL xrandr14_device_change_handler( HWND hwnd, XEvent *event )
         /* Don't send a WM_DISPLAYCHANGE message here because this event may be a result from
          * ChangeDisplaySettings(). Otherwise, ChangeDisplaySettings() would send multiple
          * WM_DISPLAYCHANGE messages instead of just one */
-        X11DRV_DisplayDevices_Update( FALSE );
+        /* HACK for Tally, sends WM_DISPLAYCHANGE in this function */
+        X11DRV_DisplayDevices_Update( TRUE );
 
         init_registry_display_settings();
     }
