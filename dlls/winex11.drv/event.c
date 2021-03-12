@@ -1350,6 +1350,18 @@ static BOOL X11DRV_PropertyNotify( HWND hwnd, XEvent *xev )
 {
     XPropertyEvent *event = &xev->xproperty;
 
+    if (!is_virtual_desktop() && event->window == DefaultRootWindow(event->display)
+        && hwnd == GetDesktopWindow() && GetWindowThreadProcessId( hwnd, NULL ) == GetCurrentThreadId()
+        && (event->atom == x11drv_atom(_GTK_WORKAREAS_D0) || event->atom == x11drv_atom(_NET_WORKAREA)))
+    {
+        RECT work_rect, rect;
+
+        rect = get_primary_monitor_rect();
+        work_rect = get_work_area( &rect );
+        set_primary_work_area( &work_rect );
+        X11DRV_DisplayDevices_Update( TRUE) ;
+    }
+
     if (!hwnd) return FALSE;
     if (event->atom == x11drv_atom(WM_STATE)) handle_wm_state_notify( hwnd, event, TRUE );
     return TRUE;

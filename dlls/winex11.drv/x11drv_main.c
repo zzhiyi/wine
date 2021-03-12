@@ -702,6 +702,7 @@ struct x11drv_thread_data *x11drv_init_thread_data(void)
 
     if (use_xim) X11DRV_SetupXIM();
 
+    XSelectInput( data->display, DefaultRootWindow(data->display), PropertyChangeMask );
     return data;
 }
 
