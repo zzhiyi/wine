@@ -294,6 +294,7 @@ DECL_HANDLER(set_user_object_info);
 DECL_HANDLER(create_monitor);
 DECL_HANDLER(get_monitor_info);
 DECL_HANDLER(enum_monitor);
+DECL_HANDLER(set_monitor_work_area);
 DECL_HANDLER(destroy_monitor);
 DECL_HANDLER(register_hotkey);
 DECL_HANDLER(unregister_hotkey);
@@ -577,6 +578,7 @@ static const req_handler req_handlers[REQ_NB_REQUESTS] =
     (req_handler)req_create_monitor,
     (req_handler)req_get_monitor_info,
     (req_handler)req_enum_monitor,
+    (req_handler)req_set_monitor_work_area,
     (req_handler)req_destroy_monitor,
     (req_handler)req_register_hotkey,
     (req_handler)req_unregister_hotkey,
@@ -1702,7 +1704,11 @@ C_ASSERT( FIELD_OFFSET(struct enum_monitor_request, index) == 12 );
 C_ASSERT( sizeof(struct enum_monitor_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct enum_monitor_reply, handle) == 8 );
 C_ASSERT( FIELD_OFFSET(struct enum_monitor_reply, monitor_rect) == 12 );
-C_ASSERT( sizeof(struct enum_monitor_reply) == 32 );
+C_ASSERT( FIELD_OFFSET(struct enum_monitor_reply, work_rect) == 28 );
+C_ASSERT( sizeof(struct enum_monitor_reply) == 48 );
+C_ASSERT( FIELD_OFFSET(struct set_monitor_work_area_request, handle) == 12 );
+C_ASSERT( FIELD_OFFSET(struct set_monitor_work_area_request, work_rect) == 16 );
+C_ASSERT( sizeof(struct set_monitor_work_area_request) == 32 );
 C_ASSERT( FIELD_OFFSET(struct destroy_monitor_request, handle) == 12 );
 C_ASSERT( sizeof(struct destroy_monitor_request) == 16 );
 C_ASSERT( FIELD_OFFSET(struct register_hotkey_request, window) == 12 );

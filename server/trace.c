@@ -3353,6 +3353,13 @@ static void dump_enum_monitor_reply( const struct enum_monitor_reply *req )
 {
     fprintf( stderr, " handle=%08x", req->handle );
     dump_rectangle( ", monitor_rect=", &req->monitor_rect );
+    dump_rectangle( ", work_rect=", &req->work_rect );
+}
+
+static void dump_set_monitor_work_area_request( const struct set_monitor_work_area_request *req )
+{
+    fprintf( stderr, " handle=%08x", req->handle );
+    dump_rectangle( ", work_rect=", &req->work_rect );
 }
 
 static void dump_destroy_monitor_request( const struct destroy_monitor_request *req )
@@ -4652,6 +4659,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_create_monitor_request,
     (dump_func)dump_get_monitor_info_request,
     (dump_func)dump_enum_monitor_request,
+    (dump_func)dump_set_monitor_work_area_request,
     (dump_func)dump_destroy_monitor_request,
     (dump_func)dump_register_hotkey_request,
     (dump_func)dump_unregister_hotkey_request,
@@ -4933,6 +4941,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_get_monitor_info_reply,
     (dump_func)dump_enum_monitor_reply,
     NULL,
+    NULL,
     (dump_func)dump_register_hotkey_reply,
     (dump_func)dump_unregister_hotkey_reply,
     NULL,
@@ -5212,6 +5221,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "create_monitor",
     "get_monitor_info",
     "enum_monitor",
+    "set_monitor_work_area",
     "destroy_monitor",
     "register_hotkey",
     "unregister_hotkey",

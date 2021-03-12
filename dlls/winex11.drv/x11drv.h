@@ -650,6 +650,8 @@ extern RECT get_virtual_screen_rect(void) DECLSPEC_HIDDEN;
 extern RECT get_primary_monitor_rect(void) DECLSPEC_HIDDEN;
 extern RECT get_host_primary_monitor_rect(void) DECLSPEC_HIDDEN;
 extern RECT get_work_area( const RECT *monitor_rect ) DECLSPEC_HIDDEN;
+extern RECT get_primary_work_area( void ) DECLSPEC_HIDDEN;
+extern BOOL set_primary_work_area( const RECT *work_area ) DECLSPEC_HIDDEN;
 extern void xinerama_init( unsigned int width, unsigned int height ) DECLSPEC_HIDDEN;
 
 #define DEPTH_COUNT 3

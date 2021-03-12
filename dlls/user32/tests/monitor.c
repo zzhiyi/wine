@@ -1388,14 +1388,14 @@ static void test_work_area(void)
 
     ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
     ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
-    todo_wine ok(!EqualRect(&rc_work, &mi.rcWork), "Work area is the same.\n");
+    ok(!EqualRect(&rc_work, &mi.rcWork), "Work area is the same.\n");
 
     hmon = 0;
     ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
     ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
     ret = GetMonitorInfoA(hmon, &mi);
     ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
-    todo_wine ok(EqualRect(&mi.rcWork, &rc_work), "Expected work area %s, got %s.\n",
+    ok(EqualRect(&mi.rcWork, &rc_work), "Expected work area %s, got %s.\n",
        wine_dbgstr_rect(&rc_work), wine_dbgstr_rect(&mi.rcWork));
 
     /* Test work area after a display mode change with custom work area set */
@@ -1412,7 +1412,7 @@ static void test_work_area(void)
     ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
     ret = GetMonitorInfoA(hmon, &mi);
     ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
-    todo_wine ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
+    ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
        wine_dbgstr_rect(&rc), wine_dbgstr_rect(&mi.rcWork));
 
     change_ret = ChangeDisplaySettingsW(&old_mode, CDS_UPDATEREGISTRY | CDS_NORESET);
@@ -1423,14 +1423,14 @@ static void test_work_area(void)
 
     ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
     ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
-    todo_wine ok(!EqualRect(&rc_work, &rc), "Work area is the same.\n");
+    ok(!EqualRect(&rc_work, &rc), "Work area is the same.\n");
     hmon = 0;
     ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
     ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
     ret = GetMonitorInfoA(hmon, &mi);
     ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
     ok(!EqualRect(&mi.rcWork, &rc), "Work area is the same.\n");
-    todo_wine ok(EqualRect(&mi.rcWork, &rc_work), "Expected work area %s, got %s.\n",
+    ok(EqualRect(&mi.rcWork, &rc_work), "Expected work area %s, got %s.\n",
        wine_dbgstr_rect(&rc_work), wine_dbgstr_rect(&mi.rcWork));
 
     /* Test work area after a display frequency change with custom work area set */
@@ -1459,7 +1459,7 @@ static void test_work_area(void)
     ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
     ret = GetMonitorInfoA(hmon, &mi);
     ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
-    todo_wine ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
+    ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
        wine_dbgstr_rect(&rc), wine_dbgstr_rect(&mi.rcWork));
 
     change_ret = ChangeDisplaySettingsW(&mode, CDS_UPDATEREGISTRY | CDS_NORESET);
@@ -1477,7 +1477,7 @@ static void test_work_area(void)
     ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
     ret = GetMonitorInfoA(hmon, &mi);
     ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
-    todo_wine ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
+    ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
        wine_dbgstr_rect(&rc), wine_dbgstr_rect(&mi.rcWork));
 
     /* Restore original display mode and work area */

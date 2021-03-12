@@ -2707,6 +2707,14 @@ enum coords_relative
 @REPLY
     user_handle_t handle;         /* handle to the monitor */
     rectangle_t   monitor_rect;   /* monitor rectangle */
+    rectangle_t   work_rect;      /* monitor work area rectangle */
+@END
+
+
+/* Set monitor work area */
+@REQ(set_monitor_work_area)
+    user_handle_t handle;         /* handle to the monitor */
+    rectangle_t   work_rect;      /* monitor work area rectangle */
 @END
 
 

@@ -111,9 +111,19 @@ DECL_HANDLER(enum_monitor)
 
         reply->handle = monitor->handle;
         reply->monitor_rect = monitor->monitor_rect;
+        reply->work_rect = monitor->work_rect;
         return;
     }
     set_error( STATUS_NO_MORE_ENTRIES );
+}
+
+/* Set monitor work area */
+DECL_HANDLER(set_monitor_work_area)
+{
+    struct monitor *monitor;
+
+    if ((monitor = get_monitor( req->handle )))
+        monitor->work_rect = req->work_rect;
 }
 
 /* destroy a monitor */

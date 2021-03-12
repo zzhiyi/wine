@@ -3769,7 +3769,21 @@ struct enum_monitor_reply
     struct reply_header __header;
     user_handle_t handle;
     rectangle_t   monitor_rect;
-    char __pad_28[4];
+    rectangle_t   work_rect;
+    char __pad_44[4];
+};
+
+
+
+struct set_monitor_work_area_request
+{
+    struct request_header __header;
+    user_handle_t handle;
+    rectangle_t   work_rect;
+};
+struct set_monitor_work_area_reply
+{
+    struct reply_header __header;
 };
 
 
@@ -5610,6 +5624,7 @@ enum request
     REQ_create_monitor,
     REQ_get_monitor_info,
     REQ_enum_monitor,
+    REQ_set_monitor_work_area,
     REQ_destroy_monitor,
     REQ_register_hotkey,
     REQ_unregister_hotkey,
@@ -5894,6 +5909,7 @@ union generic_request
     struct create_monitor_request create_monitor_request;
     struct get_monitor_info_request get_monitor_info_request;
     struct enum_monitor_request enum_monitor_request;
+    struct set_monitor_work_area_request set_monitor_work_area_request;
     struct destroy_monitor_request destroy_monitor_request;
     struct register_hotkey_request register_hotkey_request;
     struct unregister_hotkey_request unregister_hotkey_request;
@@ -6176,6 +6192,7 @@ union generic_reply
     struct create_monitor_reply create_monitor_reply;
     struct get_monitor_info_reply get_monitor_info_reply;
     struct enum_monitor_reply enum_monitor_reply;
+    struct set_monitor_work_area_reply set_monitor_work_area_reply;
     struct destroy_monitor_reply destroy_monitor_reply;
     struct register_hotkey_reply register_hotkey_reply;
     struct unregister_hotkey_reply unregister_hotkey_reply;

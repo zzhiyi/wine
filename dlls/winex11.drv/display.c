@@ -237,6 +237,87 @@ RECT get_primary_monitor_rect(void)
     return primary;
 }
 
+/* Hold display_device_init mutex when calling this function */
+RECT get_primary_work_area(void)
+{
+    RECT work_area = {0};
+
+    SERVER_START_REQ(enum_monitor)
+    {
+        req->index = 0;
+        if (!wine_server_call(req))
+        {
+            SetRect(&work_area, reply->work_rect.left, reply->work_rect.top, reply->work_rect.right,
+                    reply->work_rect.bottom);
+        }
+        else
+        {
+            ERR("Failed to query primary monitor work area.\n");
+        }
+    }
+    SERVER_END_REQ;
+
+    return work_area;
+}
+
+BOOL set_primary_work_area(const RECT *work_area)
+{
+    RECT primary_rect, monitor_rect;
+    unsigned int status, i = 0;
+    HMONITOR monitor = NULL;
+    BOOL ret = FALSE;
+    HANDLE mutex;
+
+    mutex = get_display_device_init_mutex();
+
+    while (TRUE)
+    {
+        SERVER_START_REQ(enum_monitor)
+        {
+            req->index = i++;
+            if ((status = wine_server_call(req)))
+                break;
+
+            monitor = wine_server_ptr_handle(reply->handle);
+            SetRect(&monitor_rect, reply->monitor_rect.left, reply->monitor_rect.top,
+                    reply->monitor_rect.right, reply->monitor_rect.bottom);
+        }
+        SERVER_END_REQ;
+
+        if (status)
+        {
+            if (i == 1)
+                goto done;
+            else
+                break;
+        }
+
+        if (i == 1)
+            primary_rect = monitor_rect;
+        else if (!EqualRect(&monitor_rect, &primary_rect))
+            continue;
+
+        SERVER_START_REQ(set_monitor_work_area)
+        {
+            req->handle = wine_server_user_handle(monitor);
+            req->work_rect.top = work_area->top;
+            req->work_rect.left = work_area->left;
+            req->work_rect.right = work_area->right;
+            req->work_rect.bottom = work_area->bottom;
+            if (wine_server_call(req))
+                goto done;
+        }
+        SERVER_END_REQ;
+    }
+
+    ret = TRUE;
+done:
+    release_display_device_init_mutex(mutex);
+    if (!ret)
+        WARN("setting the primary work area to %s failed!\n", wine_dbgstr_rect(work_area));
+    return ret;
+}
+
 /* Get the primary monitor rect from the host system */
 RECT get_host_primary_monitor_rect(void)
 {
@@ -741,6 +822,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
     INT gpu_count, adapter_count, monitor_count;
     INT gpu, adapter, monitor;
     HDEVINFO gpu_devinfo = NULL, monitor_devinfo = NULL;
+    RECT old_primary_work_area = {0}, old_primary_rect = {0};
     HKEY video_hkey = NULL;
     INT video_index = 0;
     DWORD disposition = 0;
@@ -764,6 +846,13 @@ void X11DRV_DisplayDevices_Init(BOOL force)
 
     TRACE("via %s\n", wine_dbgstr_a(handler->name));
 
+    /* Get the old primary monitor rectangle and primary work area only if they are valid and not
+     * from the previous boot */
+    if (disposition != REG_CREATED_NEW_KEY)
+    {
+        old_primary_rect = get_primary_monitor_rect();
+        old_primary_work_area = get_primary_work_area();
+    }
     prepare_devices(video_hkey);
 
     gpu_devinfo = SetupDiCreateDeviceInfoList(&GUID_DEVCLASS_DISPLAY, NULL);
@@ -797,7 +886,22 @@ void X11DRV_DisplayDevices_Init(BOOL force)
             /* Initialize monitors */
             for (monitor = 0; monitor < monitor_count; monitor++)
             {
-                TRACE("monitor: %#x %s\n", monitor, wine_dbgstr_w(monitors[monitor].name));
+                /* Override the primary work area if it was set by SystemParametersInfo(SPI_SETWORKAREA) */
+                if (video_index == 0)
+                {
+                    if (EqualRect(&monitors[monitor].rc_monitor, &old_primary_rect)
+                            && !EqualRect(&monitors[monitor].rc_work, &old_primary_work_area))
+                    {
+                        TRACE("monitor: %#x overriding work area %s with %s.\n", monitor,
+                                wine_dbgstr_rect(&monitors[monitor].rc_work),
+                                wine_dbgstr_rect(&old_primary_work_area));
+                        monitors[monitor].rc_work = old_primary_work_area;
+                    }
+                }
+
+                TRACE("monitor: %#x %s %s %s\n", monitor, wine_dbgstr_w(monitors[monitor].name),
+                        wine_dbgstr_rect(&monitors[monitor].rc_monitor),
+                        wine_dbgstr_rect(&monitors[monitor].rc_work));
                 if (!X11DRV_InitMonitor(monitor_devinfo, &monitors[monitor], monitor, video_index, &gpu_luid, output_id++))
                     goto done;
             }
