@@ -1301,9 +1301,12 @@ static BOOL CALLBACK find_primary_mon(HMONITOR hmon, HDC hdc, LPRECT rc, LPARAM 
 
 static void test_work_area(void)
 {
+    RECT rc, rc_work, rc_normal, old_rc_work;
+    DEVMODEW mode, old_mode;
+    LONG change_ret;
+    DWORD mode_idx;
     HMONITOR hmon;
     MONITORINFO mi;
-    RECT rc_work, rc_normal;
     HWND hwnd;
     WINDOWPLACEMENT wp;
     BOOL ret;
@@ -1324,6 +1327,7 @@ static void test_work_area(void)
     ok(ret, "SystemParametersInfo error %u\n", GetLastError());
     trace("work area %s\n", wine_dbgstr_rect(&rc_work));
     ok(EqualRect(&rc_work, &mi.rcWork), "work area is different\n");
+    old_rc_work = rc_work;
 
     hwnd = CreateWindowExA(0, "static", NULL, WS_OVERLAPPEDWINDOW|WS_VISIBLE,100,100,10,10,0,0,0,NULL);
     ok(hwnd != 0, "CreateWindowEx failed\n");
@@ -1354,6 +1358,136 @@ static void test_work_area(void)
     ok(EqualRect(&rc_normal, &wp.rcNormalPosition), "normal pos is different\n");
 
     DestroyWindow(hwnd);
+
+    /* Test work area after a display mode change */
+    memset(&old_mode, 0, sizeof(old_mode));
+    old_mode.dmSize = sizeof(old_mode);
+    ret = EnumDisplaySettingsW(NULL, ENUM_CURRENT_SETTINGS, &old_mode);
+    ok(ret, "EnumDisplaySettingsW failed, error %#x.\n", GetLastError());
+
+    memset(&mode, 0, sizeof(mode));
+    mode.dmSize = sizeof(mode);
+    for (mode_idx = 0; EnumDisplaySettingsW(NULL, mode_idx, &mode); ++mode_idx)
+    {
+        if (mode.dmPelsWidth != old_mode.dmPelsWidth && mode.dmPelsHeight != old_mode.dmPelsHeight)
+            break;
+    }
+    ok(mode.dmPelsWidth && mode.dmPelsWidth != old_mode.dmPelsWidth
+       && mode.dmPelsHeight != old_mode.dmPelsHeight, "Failed to find a different display mode.\n");
+    change_ret = ChangeDisplaySettingsW(&mode, CDS_UPDATEREGISTRY | CDS_NORESET);
+    /* Win8 TestBots */
+    if (change_ret != DISP_CHANGE_SUCCESSFUL)
+    {
+        win_skip("ChangeDisplaySettingsW returned %d.\n", change_ret);
+        return;
+    }
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    change_ret = ChangeDisplaySettingsW(NULL, 0);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    flush_events();
+
+    ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+    todo_wine ok(!EqualRect(&rc_work, &mi.rcWork), "Work area is the same.\n");
+
+    hmon = 0;
+    ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
+    ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
+    ret = GetMonitorInfoA(hmon, &mi);
+    ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
+    todo_wine ok(EqualRect(&mi.rcWork, &rc_work), "Expected work area %s, got %s.\n",
+       wine_dbgstr_rect(&rc_work), wine_dbgstr_rect(&mi.rcWork));
+
+    /* Test work area after a display mode change with custom work area set */
+    SetRect(&rc, rc_work.left, rc_work.top, rc_work.right - 1, rc_work.bottom - 1);
+    ret = SystemParametersInfoA(SPI_SETWORKAREA, 0, &rc, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+
+    ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+    ok(EqualRect(&rc_work, &rc), "Expected work area %s, got %s.\n", wine_dbgstr_rect(&rc),
+       wine_dbgstr_rect(&rc_work));
+    hmon = 0;
+    ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
+    ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
+    ret = GetMonitorInfoA(hmon, &mi);
+    ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
+    todo_wine ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
+       wine_dbgstr_rect(&rc), wine_dbgstr_rect(&mi.rcWork));
+
+    change_ret = ChangeDisplaySettingsW(&old_mode, CDS_UPDATEREGISTRY | CDS_NORESET);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    change_ret = ChangeDisplaySettingsW(NULL, 0);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    flush_events();
+
+    ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+    todo_wine ok(!EqualRect(&rc_work, &rc), "Work area is the same.\n");
+    hmon = 0;
+    ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
+    ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
+    ret = GetMonitorInfoA(hmon, &mi);
+    ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
+    ok(!EqualRect(&mi.rcWork, &rc), "Work area is the same.\n");
+    todo_wine ok(EqualRect(&mi.rcWork, &rc_work), "Expected work area %s, got %s.\n",
+       wine_dbgstr_rect(&rc_work), wine_dbgstr_rect(&mi.rcWork));
+
+    /* Test work area after a display frequency change with custom work area set */
+    for (mode_idx = 0; EnumDisplaySettingsW(NULL, mode_idx, &mode); ++mode_idx)
+    {
+        if (mode.dmPelsWidth == old_mode.dmPelsWidth && mode.dmPelsHeight == old_mode.dmPelsHeight
+            && mode.dmDisplayFrequency != old_mode.dmDisplayFrequency)
+            break;
+    }
+    if (!(mode.dmPelsWidth == old_mode.dmPelsWidth && mode.dmPelsHeight == old_mode.dmPelsHeight
+          && mode.dmDisplayFrequency != old_mode.dmDisplayFrequency))
+    {
+        skip("Failed to find a display mode with the same resolution and different frequency.\n");
+        return;
+    }
+    SetRect(&rc, rc_work.left, rc_work.top, rc_work.right - 1, rc_work.bottom - 1);
+    ret = SystemParametersInfoA(SPI_SETWORKAREA, 0, &rc, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+
+    ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+    ok(EqualRect(&rc_work, &rc), "Expected work area %s, got %s.\n", wine_dbgstr_rect(&rc),
+       wine_dbgstr_rect(&rc_work));
+    hmon = 0;
+    ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
+    ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
+    ret = GetMonitorInfoA(hmon, &mi);
+    ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
+    todo_wine ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
+       wine_dbgstr_rect(&rc), wine_dbgstr_rect(&mi.rcWork));
+
+    change_ret = ChangeDisplaySettingsW(&mode, CDS_UPDATEREGISTRY | CDS_NORESET);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    change_ret = ChangeDisplaySettingsW(NULL, 0);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    flush_events();
+
+    ret = SystemParametersInfoA(SPI_GETWORKAREA, 0, &rc_work, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
+    ok(EqualRect(&rc_work, &rc), "Expected work area %s, got %s.\n", wine_dbgstr_rect(&rc),
+       wine_dbgstr_rect(&rc_work));
+    hmon = 0;
+    ret = EnumDisplayMonitors(NULL, NULL, find_primary_mon, (LPARAM)&hmon);
+    ok(!ret && hmon != 0, "Failed to find the primary monitor.\n");
+    ret = GetMonitorInfoA(hmon, &mi);
+    ok(ret, "GetMonitorInfo failed, error %#x.\n", GetLastError());
+    todo_wine ok(EqualRect(&mi.rcWork, &rc), "Expected work area %s, got %s.\n",
+       wine_dbgstr_rect(&rc), wine_dbgstr_rect(&mi.rcWork));
+
+    /* Restore original display mode and work area */
+    change_ret = ChangeDisplaySettingsW(&old_mode, CDS_UPDATEREGISTRY | CDS_NORESET);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    change_ret = ChangeDisplaySettingsW(NULL, 0);
+    ok(change_ret == DISP_CHANGE_SUCCESSFUL, "ChangeDisplaySettingsW returned %d.\n", change_ret);
+    flush_events();
+    ret = SystemParametersInfoA(SPI_SETWORKAREA, 0, &old_rc_work, 0);
+    ok(ret, "SystemParametersInfoA failed, error %#x.\n", GetLastError());
 }
 
 static void test_GetDisplayConfigBufferSizes(void)
