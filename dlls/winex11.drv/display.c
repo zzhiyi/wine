@@ -47,7 +47,6 @@ DEFINE_DEVPROPKEY(DEVPROPKEY_MONITOR_OUTPUT_ID, 0xca085853, 0x16ce, 0x48aa, 0xb1
 /* Wine specific properties */
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_GPU_VULKAN_UUID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5c, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
-DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 5);
 
 static const WCHAR driver_date_dataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
@@ -146,14 +145,11 @@ void release_display_device_init_mutex(HANDLE mutex)
 static BOOL update_screen_cache(void)
 {
     RECT virtual_rect = {0}, primary_rect = {0}, monitor_rect;
-    SP_DEVINFO_DATA device_data = {sizeof(device_data)};
-    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
     FILETIME filetime = {0};
     HANDLE mutex = NULL;
+    NTSTATUS status;
     DWORD i = 0;
     INT result;
-    DWORD type;
-    BOOL ret = FALSE;
 
     EnterCriticalSection(&screen_section);
     if ((!video_key && RegOpenKeyW(HKEY_LOCAL_MACHINE, video_keyW, &video_key))
@@ -169,15 +165,21 @@ static BOOL update_screen_cache(void)
 
     mutex = get_display_device_init_mutex();
 
-    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_MONITOR, displayW, NULL, DIGCF_PRESENT);
-    if (devinfo == INVALID_HANDLE_VALUE)
-        goto fail;
-
-    while (SetupDiEnumDeviceInfo(devinfo, i++, &device_data))
+    while (TRUE)
     {
-        if (!SetupDiGetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, &type,
-                                       (BYTE *)&monitor_rect, sizeof(monitor_rect), NULL, 0))
-            goto fail;
+        SERVER_START_REQ(enum_monitor)
+        {
+            req->index = i++;
+            if (!(status = wine_server_call(req)))
+            {
+                SetRect(&monitor_rect, reply->monitor_rect.left, reply->monitor_rect.top,
+                        reply->monitor_rect.right, reply->monitor_rect.bottom);
+            }
+        }
+        SERVER_END_REQ;
+
+        if (status)
+            break;
 
         UnionRect(&virtual_rect, &virtual_rect, &monitor_rect);
         if (i == 1)
@@ -189,13 +191,8 @@ static BOOL update_screen_cache(void)
     primary_monitor_rect = primary_rect;
     last_query_screen_time = filetime;
     LeaveCriticalSection(&screen_section);
-    ret = TRUE;
-fail:
-    SetupDiDestroyDeviceInfoList(devinfo);
     release_display_device_init_mutex(mutex);
-    if (!ret)
-        WARN("Update screen cache failed!\n");
-    return ret;
+    return TRUE;
 }
 
 POINT virtual_screen_to_root(INT x, INT y)
@@ -620,10 +617,6 @@ static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *mo
     /* StateFlags */
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_STATEFLAGS, DEVPROP_TYPE_UINT32,
                                    (const BYTE *)&monitor->state_flags, sizeof(monitor->state_flags), 0))
-        goto done;
-    /* RcMonitor */
-    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, DEVPROP_TYPE_BINARY,
-                                   (const BYTE *)&monitor->rc_monitor, sizeof(monitor->rc_monitor), 0))
         goto done;
     /* Adapter name */
     sprintfW(bufferW, adapter_name_fmtW, video_index + 1);
