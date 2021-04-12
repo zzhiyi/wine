@@ -57,6 +57,29 @@ static inline int get_dib_image_size( const BITMAPINFO *info )
         * abs( info->bmiHeader.biHeight );
 }
 
+static void dump_bits(int bpp, int width, const BYTE *expected, const BYTE *result, int size,
+                      const char *comment)
+{
+    int i, stride;
+
+    stride = get_dib_stride(width, bpp);
+    printf("%s expected:\n", comment);
+    for (i = 0; i < size; i++)
+    {
+        printf("%02x ", expected[i]);
+        if ((i + 1) % stride == 0)
+            printf("\n");
+    }
+    printf("\n%s got:\n", comment);
+    for (i = 0; i < size; i++)
+    {
+        printf("%02x ", result[i]);
+        if ((i + 1) % stride == 0)
+            printf("\n");
+    }
+    printf("\n");
+}
+
 static void test_bitmap_info(HBITMAP hbm, INT expected_depth, const BITMAPINFOHEADER *bmih)
 {
     BITMAP bm;
@@ -3426,6 +3449,1118 @@ static void test_StretchBlt(void)
     DeleteDC(hdcScreen);
 }
 
+static void test_StretchBlt_HALFTONE(void)
+{
+#define PAD_ZERO 0x00,
+
+    /* Same dimension */
+    /* 1x1 -> 1x1 */
+    static const unsigned char test_bits_0[] =
+    {
+        0xff, 0x7f, 0x00,
+    };
+    static const unsigned char expected_bits_0[] =
+    {
+        0xff, 0x7f, 0x00,
+    };
+
+    /* Shrink horizontally */
+    /* 2x1 -> 1x1 */
+    /* 0xff / 2 = 0x7f.8, (0xff + 1) / 2 = 0x80 */
+    static const unsigned char test_bits_1[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x01, 0x00,
+    };
+    static const unsigned char expected_bits_1[] =
+    {
+        0x7f, 0x80, 0x7f,
+    };
+    static const unsigned char test_bits_2[] =
+    {
+        0x00, 0x01, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_2[] =
+    {
+        0x7f, 0x80, 0x7f,
+    };
+
+    /* 3x1 -> 1x1 */
+    /* 0xff / 3 = 0x55 */
+    static const unsigned char test_bits_3[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_3[] =
+    {
+        0x54, 0x54, 0x54,
+    };
+    static const unsigned char test_bits_4[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_4[] =
+    {
+        0x55, 0x55, 0x55,
+    };
+    static const unsigned char test_bits_5[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_5[] =
+    {
+        0x55, 0x55, 0x55,
+    };
+    /* 0xff * 2 / 3 = 0xaa */
+    static const unsigned char test_bits_6[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_6[] =
+    {
+        0xa9, 0xa9, 0xa9,
+    };
+    static const unsigned char test_bits_7[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_7[] =
+    {
+        0xa9, 0xa9, 0xa9,
+    };
+    static const unsigned char test_bits_8[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_8[] =
+    {
+        0xaa, 0xaa, 0xaa,
+    };
+    static const unsigned char test_bits_9[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_9[] =
+    {
+        0xff, 0xff, 0xff,
+    };
+
+    /* 4x1 -> 1x1 */
+    /* 0xff * 3 / 4 = 0xbf.4 */
+    static const unsigned char test_bits_10[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_10[] =
+    {
+        0xbf, 0xbf, 0xbf,
+    };
+
+    /* 5x1 -> 1x1 */
+    /* 0xff * 4 / 5 = 0xcc */
+    static const unsigned char test_bits_11[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_11[] =
+    {
+        0xcc, 0xcc, 0xcc,
+    };
+
+    /* Shrink horizontally with non-integer ratio */
+    /* 3x1 -> 2x1 */
+    static const unsigned char test_bits_12[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_12[] =
+    {
+        0xd4, 0xd4, 0xd4,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char test_bits_13[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_13[] =
+    {
+        0x55, 0x55, 0x55,  0x54, 0x54, 0x54,
+    };
+    static const unsigned char test_bits_14[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_14[] =
+    {
+        0x00, 0x00, 0x00,  0xd4, 0xd4, 0xd4,
+    };
+    static const unsigned char test_bits_15[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_15[] =
+    {
+        0xff, 0xff, 0xff,  0x2a, 0x2a, 0x2a,
+    };
+    static const unsigned char test_bits_16[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_16[] =
+    {
+        0xa9, 0xa9, 0xa9,  0xaa, 0xaa, 0xaa,
+    };
+    static const unsigned char test_bits_17[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_17[] =
+    {
+        0x2a, 0x2a, 0x2a,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char test_bits_18[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_18[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+
+    /* 4x1 -> 3x1 */
+    static const unsigned char test_bits_19[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_19[] =
+    {
+        0x0f, 0x0f, 0x0f,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char test_bits_20[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_20[] =
+    {
+        0xcf, 0xcf, 0xcf,  0x7f, 0x7f, 0x7f,  0x2f, 0x2f, 0x2f,
+    };
+    static const unsigned char test_bits_21[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_21[] =
+    {
+        0x2f, 0x2f, 0x2f,  0x7f, 0x7f, 0x7f,  0xcf, 0xcf, 0xcf,
+    };
+    static const unsigned char test_bits_22[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff
+    };
+    static const unsigned char expected_bits_22[] =
+    {
+        0xef, 0xef, 0xef,  0x00, 0x00, 0x00,  0xef, 0xef, 0xef,
+    };
+    static const unsigned char test_bits_23[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_23[] =
+    {
+        0x0f, 0x0f, 0x0f,  0xff, 0xff, 0xff,  0x0f, 0x0f, 0x0f,
+    };
+
+    /* 5x1 -> 3x1 */
+    static const unsigned char test_bits_24[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_24[] =
+    {
+        0x3f, 0x3f, 0x3f,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char test_bits_25[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char expected_bits_25[] =
+    {
+        0x66, 0x66, 0x66,  0x66, 0x66, 0x66,  0x65, 0x65, 0x65,
+    };
+    static const unsigned char test_bits_26[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_26[] =
+    {
+        0x98, 0x98, 0x98,  0x98, 0x98, 0x98,  0x99, 0x99, 0x99,
+    };
+
+    /* Shrink vertically */
+    /* 1x2 -> 1x1 */
+    /* 0xff / 2 = 0x7f.8, (0xff + 1) / 2 = 0x80 */
+    static const unsigned char test_bits_27[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x01, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_27[] =
+    {
+        0x7f, 0x80, 0x7f
+    };
+    static const unsigned char test_bits_28[] =
+    {
+        0x00, 0x01, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_28[] =
+    {
+        0x7f, 0x80, 0x7f
+    };
+
+    /* 1x3 -> 1x1 */
+    /* 0xff / 3 = 0x55 */
+    static const unsigned char test_bits_29[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_29[] =
+    {
+        0x55, 0x55, 0x55,
+    };
+    static const unsigned char test_bits_30[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_30[] =
+    {
+        0x55, 0x55, 0x55,
+    };
+    static const unsigned char test_bits_31[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_31[] =
+    {
+        0x54, 0x54, 0x54,
+    };
+    /* 0xff * 2 / 3 = 0xaa */
+    static const unsigned char test_bits_32[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_32[] =
+    {
+        0xaa, 0xaa, 0xaa,
+    };
+    static const unsigned char test_bits_33[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_33[] =
+    {
+        0xa9, 0xa9, 0xa9,
+    };
+    static const unsigned char test_bits_34[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_34[] =
+    {
+        0xa9, 0xa9, 0xa9,
+    };
+    static const unsigned char test_bits_35[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_35[] =
+    {
+        0xff, 0xff, 0xff,
+    };
+
+    /* 1x4 -> 1x1 */
+    /* 0xff * 3 / 4 = 0xbf.4 */
+    static const unsigned char test_bits_36[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_36[] =
+    {
+        0xbf, 0xbf, 0xbf,
+    };
+
+    /* 1x5 -> 1x1 */
+    /* 0xff * 4 / 5 = 0xcc */
+    static const unsigned char test_bits_37[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_37[] =
+    {
+        0xcb, 0xcb, 0xcb,
+    };
+
+    /* Shrink vertically with a non-integer ratio */
+    /* 3x1 -> 2x1 */
+    static const unsigned char test_bits_38[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_38[] =
+    {
+        0xd4, 0xd4, 0xd4,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char test_bits_39[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_39[] =
+    {
+        0x54, 0x54, 0x54,  PAD_ZERO
+        0x55, 0x55, 0x55,  PAD_ZERO
+    };
+    static const unsigned char test_bits_40[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_40[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xd4, 0xd4, 0xd4,  PAD_ZERO
+    };
+    static const unsigned char test_bits_41[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_41[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x2a, 0x2a, 0x2a,  PAD_ZERO
+    };
+    static const unsigned char test_bits_42[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_42[] =
+    {
+        0xaa, 0xaa, 0xaa,  PAD_ZERO
+        0xa9, 0xa9, 0xa9,  PAD_ZERO
+    };
+    static const unsigned char test_bits_43[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_43[] =
+    {
+        0x2a, 0x2a, 0x2a,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char test_bits_44[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_44[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+
+    /* 4x1 -> 3x1 */
+    static const unsigned char test_bits_45[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_45[] =
+    {
+        0x0f, 0x0f, 0x0f,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char test_bits_46[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_46[] =
+    {
+        0xcf, 0xcf, 0xcf,  PAD_ZERO
+        0x7f, 0x7f, 0x7f,  PAD_ZERO
+        0x2f, 0x2f, 0x2f,  PAD_ZERO
+    };
+    static const unsigned char test_bits_47[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_47[] =
+    {
+        0x2f, 0x2f, 0x2f,  PAD_ZERO
+        0x7f, 0x7f, 0x7f,  PAD_ZERO
+        0xcf, 0xcf, 0xcf,  PAD_ZERO
+    };
+    static const unsigned char test_bits_48[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_48[] =
+    {
+        0xef, 0xef, 0xef,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xef, 0xef, 0xef,  PAD_ZERO
+    };
+    static const unsigned char test_bits_49[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_49[] =
+    {
+        0x0f, 0x0f, 0x0f,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x0f, 0x0f, 0x0f,  PAD_ZERO
+    };
+
+    /* 5x1 -> 3x1 */
+    static const unsigned char test_bits_50[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_50[] =
+    {
+        0x3f, 0x3f, 0x3f,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char test_bits_51[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_51[] =
+    {
+        0x65, 0x65, 0x65,  PAD_ZERO
+        0x66, 0x66, 0x66,  PAD_ZERO
+        0x66, 0x66, 0x66,  PAD_ZERO
+    };
+    static const unsigned char test_bits_52[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_52[] =
+    {
+        0x99, 0x99, 0x99,  PAD_ZERO
+        0x98, 0x98, 0x98,  PAD_ZERO
+        0x98, 0x98, 0x98,  PAD_ZERO
+    };
+
+    /* Stretch horizontally */
+    /* 1x1 -> 2x1 */
+    static const unsigned char test_bits_53[] =
+    {
+        0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_53[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    /* 2x1 -> 3x1 */
+    static const unsigned char test_bits_54[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_54[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,
+    };
+    /* 3x1 -> 4x1 */
+    static const unsigned char test_bits_55[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_55[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    /* 4x1 -> 5x1 */
+    static const unsigned char test_bits_56[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_56[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+
+    /* Stretch vertically */
+    /* 1x1 -> 1x2 */
+    static const unsigned char test_bits_57[] =
+    {
+        0xff, 0xff, 0xff,
+    };
+    static const unsigned char expected_bits_57[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    /* 1x2 -> 1x3 */
+    static const unsigned char test_bits_58[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_58[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    /* 1x3 -> 1x4 */
+    static const unsigned char test_bits_59[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_59[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    /* 1x4 -> 1x5 */
+    static const unsigned char test_bits_60[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char expected_bits_60[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+
+    /* Shrink both horizontally and vertically*/
+    /* 2x2 -> 1x1 */
+    /* 0xff / 4 = 0x3f.c */
+    static const unsigned char test_bits_61[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_61[] =
+    {
+        0x40, 0x40, 0x40,
+    };
+    static const unsigned char test_bits_62[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_62[] =
+    {
+        0x40, 0x40, 0x40,
+    };
+    static const unsigned char test_bits_63[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_63[] =
+    {
+        0x40, 0x40, 0x40,
+    };
+    static const unsigned char test_bits_64[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_64[] =
+    {
+        0x40, 0x40, 0x40,
+    };
+    /* 0xff * 2 / 4 = 0x7f.8 */
+    static const unsigned char test_bits_65[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_65[] =
+    {
+        0x80, 0x80, 0x80,
+    };
+    static const unsigned char test_bits_66[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_66[] =
+    {
+        0x80, 0x80, 0x80,
+    };
+    static const unsigned char test_bits_67[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_67[] =
+    {
+        0xff, 0xff, 0xff,
+    };
+
+    /* Stretch horizontally and shrink vertically */
+    /* 2x2 -> 1x4 */
+    static const unsigned char test_bits_68[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_68[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char test_bits_69[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_69[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff
+    };
+    static const unsigned char test_bits_70[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_70[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,
+    };
+    static const unsigned char test_bits_71[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_71[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00
+    };
+    static const unsigned char test_bits_72[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_72[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff,
+    };
+    static const unsigned char test_bits_73[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_73[] =
+    {
+         0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0x00, 0x00, 0x00,
+    };
+    /* 0xff * 2 / 4 = 0x7f.8 */
+    static const unsigned char test_bits_74[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_74[] =
+    {
+        0x80, 0x80, 0x80,  0x80, 0x80, 0x80,  0x80, 0x80, 0x80,  0x80, 0x80, 0x80
+    };
+    static const unsigned char test_bits_75[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_75[] =
+    {
+        0x80, 0x80, 0x80,  0x80, 0x80, 0x80,  0x80, 0x80, 0x80,  0x80, 0x80, 0x80
+    };
+    static const unsigned char test_bits_76[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0xfe, 0xfe, 0xfe,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_76[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  0xff, 0xff, 0xff
+    };
+    /* 0xfe * 2 / 4 = 0x7f */
+    static const unsigned char test_bits_77[] =
+    {
+        0x00, 0x00, 0x00,  0xfe, 0xfe, 0xfe,  PAD_ZERO PAD_ZERO
+        0xfe, 0xfe, 0xfe,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_77[] =
+    {
+        0x7f, 0x7f, 0x7f,  0x7f, 0x7f, 0x7f,  0x7f, 0x7f, 0x7f,  0x7f, 0x7f, 0x7f
+    };
+
+    /* Stretch vertically and shrink horizontally */
+    /* 2x2 -> 4x1 */
+    static const unsigned char test_bits_78[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_78[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char test_bits_79[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_79[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char test_bits_80[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_80[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char test_bits_81[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_81[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    static const unsigned char test_bits_82[] =
+    {
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_82[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    static const unsigned char test_bits_83[] =
+    {
+        0x00, 0x00, 0x00,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_83[] =
+    {
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+    };
+    /* 0xff * 2 / 4 = 0x7f.8 */
+    static const unsigned char test_bits_84[] =
+    {
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_84[] =
+    {
+        0x80, 0x80, 0x80,  PAD_ZERO
+        0x80, 0x80, 0x80,  PAD_ZERO
+        0x80, 0x80, 0x80,  PAD_ZERO
+        0x80, 0x80, 0x80,  PAD_ZERO
+    };
+    static const unsigned char test_bits_85[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0xff, 0xff, 0xff,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_85[] =
+    {
+        0x80, 0x80, 0x80,  PAD_ZERO
+        0x80, 0x80, 0x80,  PAD_ZERO
+        0x80, 0x80, 0x80,  PAD_ZERO
+        0x80, 0x80, 0x80,  PAD_ZERO
+    };
+    static const unsigned char test_bits_86[] =
+    {
+        0x00, 0x00, 0x00,  0xff, 0xff, 0xff,  PAD_ZERO PAD_ZERO
+        0xfe, 0xfe, 0xfe,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_86[] =
+    {
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0xff, 0xff, 0xff,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+        0x00, 0x00, 0x00,  PAD_ZERO
+    };
+    /* 0xfe * 2 / 4 = 0x7f */
+    static const unsigned char test_bits_87[] =
+    {
+        0x00, 0x00, 0x00,  0xfe, 0xfe, 0xfe,  PAD_ZERO PAD_ZERO
+        0xfe, 0xfe, 0xfe,  0x00, 0x00, 0x00,  PAD_ZERO PAD_ZERO
+    };
+    static const unsigned char expected_bits_87[] =
+    {
+        0x7f, 0x7f, 0x7f,  PAD_ZERO
+        0x7f, 0x7f, 0x7f,  PAD_ZERO
+        0x7f, 0x7f, 0x7f,  PAD_ZERO
+        0x7f, 0x7f, 0x7f,  PAD_ZERO
+    };
+
+#undef PAD_ZERO
+
+    static const struct
+    {
+        const unsigned char *src_bits;
+        size_t src_bits_size;
+        const unsigned char *dst_bits;
+        size_t dst_bits_size;
+        int bpp;
+        int src_width;
+        int src_height;
+        int dst_width;
+        int dst_height;
+        BOOL todo;
+    }
+    tests[] =
+    {
+#define BITS(x) test_bits_##x, sizeof(test_bits_##x), expected_bits_##x, sizeof(expected_bits_##x)
+
+        {BITS(0), 24, 1, 1, 1, 1},
+        {BITS(1), 24, 2, 1, 1, 1, TRUE},
+        {BITS(2), 24, 2, 1, 1, 1, TRUE},
+        {BITS(3), 24, 3, 1, 1, 1, TRUE},
+        {BITS(4), 24, 3, 1, 1, 1, TRUE},
+        {BITS(5), 24, 3, 1, 1, 1, TRUE},
+        {BITS(6), 24, 3, 1, 1, 1, TRUE},
+        {BITS(7), 24, 3, 1, 1, 1, TRUE},
+        {BITS(8), 24, 3, 1, 1, 1, TRUE},
+        {BITS(9), 24, 3, 1, 1, 1},
+        {BITS(10), 24, 4, 1, 1, 1, TRUE},
+        {BITS(11), 24, 5, 1, 1, 1, TRUE},
+        {BITS(12), 24, 3, 1, 2, 1, TRUE},
+        {BITS(13), 24, 3, 1, 2, 1, TRUE},
+        {BITS(14), 24, 3, 1, 2, 1, TRUE},
+        {BITS(15), 24, 3, 1, 2, 1, TRUE},
+        {BITS(16), 24, 3, 1, 2, 1, TRUE},
+        {BITS(17), 24, 3, 1, 2, 1, TRUE},
+        {BITS(18), 24, 3, 1, 2, 1},
+        {BITS(19), 24, 4, 1, 3, 1, TRUE},
+        {BITS(20), 24, 4, 1, 3, 1, TRUE},
+        {BITS(21), 24, 4, 1, 3, 1, TRUE},
+        {BITS(22), 24, 4, 1, 3, 1, TRUE},
+        {BITS(23), 24, 4, 1, 3, 1, TRUE},
+        {BITS(24), 24, 5, 1, 3, 1, TRUE},
+        {BITS(25), 24, 5, 1, 3, 1, TRUE},
+        {BITS(26), 24, 5, 1, 3, 1, TRUE},
+        {BITS(27), 24, 1, 2, 1, 1, TRUE},
+        {BITS(28), 24, 1, 2, 1, 1, TRUE},
+        {BITS(29), 24, 1, 3, 1, 1, TRUE},
+        {BITS(30), 24, 1, 3, 1, 1, TRUE},
+        {BITS(31), 24, 1, 3, 1, 1, TRUE},
+        {BITS(32), 24, 1, 3, 1, 1, TRUE},
+        {BITS(33), 24, 1, 3, 1, 1, TRUE},
+        {BITS(34), 24, 1, 3, 1, 1, TRUE},
+        {BITS(35), 24, 1, 3, 1, 1},
+        {BITS(36), 24, 1, 4, 1, 1, TRUE},
+        {BITS(37), 24, 1, 5, 1, 1, TRUE},
+        {BITS(38), 24, 1, 3, 1, 2, TRUE},
+        {BITS(39), 24, 1, 3, 1, 2, TRUE},
+        {BITS(40), 24, 1, 3, 1, 2, TRUE},
+        {BITS(41), 24, 1, 3, 1, 2, TRUE},
+        {BITS(42), 24, 1, 3, 1, 2, TRUE},
+        {BITS(43), 24, 1, 3, 1, 2, TRUE},
+        {BITS(44), 24, 1, 3, 1, 2},
+        {BITS(45), 24, 1, 4, 1, 3, TRUE},
+        {BITS(46), 24, 1, 4, 1, 3, TRUE},
+        {BITS(47), 24, 1, 4, 1, 3, TRUE},
+        {BITS(48), 24, 1, 4, 1, 3, TRUE},
+        {BITS(49), 24, 1, 4, 1, 3, TRUE},
+        {BITS(50), 24, 1, 5, 1, 3, TRUE},
+        {BITS(51), 24, 1, 5, 1, 3, TRUE},
+        {BITS(52), 24, 1, 5, 1, 3, TRUE},
+        {BITS(53), 24, 1, 1, 2, 1},
+        {BITS(54), 24, 2, 1, 3, 1, TRUE},
+        {BITS(55), 24, 3, 1, 4, 1, TRUE},
+        {BITS(56), 24, 4, 1, 5, 1, TRUE},
+        {BITS(57), 24, 1, 1, 1, 2},
+        {BITS(58), 24, 1, 2, 1, 3, TRUE},
+        {BITS(59), 24, 1, 3, 1, 4, TRUE},
+        {BITS(60), 24, 1, 4, 1, 5, TRUE},
+        {BITS(61), 24, 2, 2, 1, 1, TRUE},
+        {BITS(62), 24, 2, 2, 1, 1, TRUE},
+        {BITS(63), 24, 2, 2, 1, 1, TRUE},
+        {BITS(64), 24, 2, 2, 1, 1, TRUE},
+        {BITS(65), 24, 2, 2, 1, 1, TRUE},
+        {BITS(66), 24, 2, 2, 1, 1, TRUE},
+        {BITS(67), 24, 2, 2, 1, 1},
+        {BITS(68), 24, 2, 2, 4, 1, TRUE},
+        {BITS(69), 24, 2, 2, 4, 1, TRUE},
+        {BITS(70), 24, 2, 2, 4, 1, TRUE},
+        {BITS(71), 24, 2, 2, 4, 1, TRUE},
+        {BITS(72), 24, 2, 2, 4, 1, TRUE},
+        {BITS(73), 24, 2, 2, 4, 1, TRUE},
+        {BITS(74), 24, 2, 2, 4, 1, TRUE},
+        {BITS(75), 24, 2, 2, 4, 1, TRUE},
+        {BITS(76), 24, 2, 2, 4, 1, TRUE},
+        {BITS(77), 24, 2, 2, 4, 1, TRUE},
+        {BITS(78), 24, 2, 2, 1, 4, TRUE},
+        {BITS(79), 24, 2, 2, 1, 4, TRUE},
+        {BITS(80), 24, 2, 2, 1, 4, TRUE},
+        {BITS(81), 24, 2, 2, 1, 4, TRUE},
+        {BITS(82), 24, 2, 2, 1, 4, TRUE},
+        {BITS(83), 24, 2, 2, 1, 4, TRUE},
+        {BITS(84), 24, 2, 2, 1, 4, TRUE},
+        {BITS(85), 24, 2, 2, 1, 4, TRUE},
+        {BITS(86), 24, 2, 2, 1, 4, TRUE},
+        {BITS(87), 24, 2, 2, 1, 4, TRUE},
+
+#undef BITS
+    };
+
+    unsigned char bmi_buffer[FIELD_OFFSET(BITMAPINFO, bmiColors[256])];
+    HBITMAP src_bmp, dst_bmp, old_src_bmp, old_dst_bmp;
+    BITMAPINFO *bmi = (BITMAPINFO *)bmi_buffer;
+    unsigned char *src_bits, *dst_bits;
+    HDC dc, src_dc, dst_dc;
+    char comment[32];
+    int i, ret;
+
+    dc = GetDC(0);
+
+    memset(&bmi_buffer, 0, sizeof(bmi_buffer));
+    bmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi->bmiHeader.biPlanes = 1;
+    bmi->bmiHeader.biCompression = BI_RGB;
+
+    for (i = 0; i < ARRAY_SIZE(tests); ++i)
+    {
+        bmi->bmiHeader.biBitCount = tests[i].bpp;
+        bmi->bmiHeader.biWidth = tests[i].src_width;
+        bmi->bmiHeader.biHeight = tests[i].src_height;
+        src_dc = CreateCompatibleDC(dc);
+        src_bmp = CreateDIBSection(src_dc, bmi, DIB_RGB_COLORS, (void **)&src_bits, NULL, 0);
+        ok(src_bmp && src_bits, "Test %d: CreateDIBSection failed, error %u.\n", i, GetLastError());
+        memcpy(src_bits, tests[i].src_bits, tests[i].src_bits_size);
+        old_src_bmp = SelectObject(src_dc, src_bmp);
+
+        bmi->bmiHeader.biWidth = tests[i].dst_width;
+        bmi->bmiHeader.biHeight = tests[i].dst_height;
+        dst_dc = CreateCompatibleDC(dc);
+        dst_bmp = CreateDIBSection(dst_dc, bmi, DIB_RGB_COLORS, (void **)&dst_bits, NULL, 0);
+        ok(dst_bmp && dst_bits, "Test %d: CreateDIBSection failed, error %u.\n", i, GetLastError());
+        old_dst_bmp = SelectObject(dst_dc, dst_bmp);
+
+        SetStretchBltMode(dst_dc, HALFTONE);
+        ret = GetStretchBltMode(dst_dc);
+        ok(ret == HALFTONE, "Test %d: Expected mode %#x, got %#x\n", i, HALFTONE, ret);
+        ret = StretchBlt(dst_dc, 0, 0, tests[i].dst_width, tests[i].dst_height, src_dc, 0, 0,
+                         tests[i].src_width, tests[i].src_height, SRCCOPY);
+        ok(ret, "Test %d: StretchBlt failed, error %u.\n", i, GetLastError());
+
+        ret = memcmp(dst_bits, tests[i].dst_bits, tests[i].dst_bits_size);
+        todo_wine_if(tests[i].todo)
+        ok(!ret, "Test %d: Bits mismatch.\n", i);
+        if (ret)
+        {
+            sprintf(comment, "StretchBlt_HALFTONE test %d", i);
+            dump_bits(tests[i].bpp, tests[i].dst_width, tests[i].dst_bits, dst_bits,
+                      tests[i].dst_bits_size, comment);
+        }
+
+        SelectObject(dst_dc, old_dst_bmp);
+        SelectObject(src_dc, old_src_bmp);
+        DeleteObject(dst_bmp);
+        DeleteObject(src_bmp);
+        DeleteDC(dst_dc);
+        DeleteDC(src_dc);
+    }
+
+    ReleaseDC(0, dc);
+}
+
 static void check_StretchDIBits_pixel(HDC hdcDst, UINT32 *dstBuffer, UINT32 *srcBuffer,
                                       DWORD dwRop, UINT32 expected, int line)
 {
@@ -5963,6 +7098,7 @@ START_TEST(bitmap)
     test_CreateBitmap();
     test_BitBlt();
     test_StretchBlt();
+    test_StretchBlt_HALFTONE();
     test_StretchDIBits();
     test_GdiAlphaBlend();
     test_GdiGradientFill();

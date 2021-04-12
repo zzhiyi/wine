@@ -7430,6 +7430,78 @@ static void shrink_row_null(const dib_info *dst_dib, const POINT *dst_start,
     return;
 }
 
+static void set_colorref_888(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    DWORD *ptr = get_pixel_ptr_32( dib, x, y );
+    *ptr = ((r << 16) & 0xff0000) | ((g << 8) & 0x00ff00) | (b & 0x0000ff);
+}
+
+static void set_colorref_32(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    DWORD *ptr = get_pixel_ptr_32( dib, x, y );
+    *ptr = rgb_to_pixel_masks( dib, r, g, b );
+}
+
+static void set_colorref_24(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    BYTE *ptr = get_pixel_ptr_24( dib, x, y );
+    ptr[0] = b;
+    ptr[1] = g;
+    ptr[2] = r;
+}
+
+static void set_pixel_555(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    WORD *ptr = get_pixel_ptr_16( dib, x, y );
+    *ptr = ((r << 7) & 0x7c00) | ((g << 2) & 0x03e0) | ((b >> 3) & 0x001f);
+}
+
+static void set_colorref_16(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    WORD *ptr = get_pixel_ptr_16( dib, x, y );
+    *ptr = rgb_to_pixel_masks( dib, r, g, b );
+}
+
+static void set_colorref_8(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    BYTE *ptr = get_pixel_ptr_8( dib, x, y );
+    *ptr = rgb_to_pixel_colortable( dib, r, g, b );
+}
+
+static void set_colorref_4(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    BYTE *ptr = get_pixel_ptr_4( dib, x, y );
+    BYTE val;
+
+    val = rgb_to_pixel_colortable( dib, r, g, b );
+    if ((x - dib->rect.left) & 1)
+        *ptr = (val & 0x0f) | (*ptr & 0xf0);
+    else
+        *ptr = (val << 4) & 0xf0;
+}
+
+static void set_colorref_1(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+    BYTE *ptr = get_pixel_ptr_1( dib, x, y );
+    RGBQUAD bg_entry;
+    DWORD bg_pixel;
+    BYTE dst_val;
+    int bit_pos;
+
+    bit_pos = (x - dib->rect.left) & 7;
+    bg_entry = *get_dib_color_table( dib );
+    bg_pixel = FILTER_DIBINDEX(bg_entry, RGB(bg_entry.rgbRed, bg_entry.rgbGreen, bg_entry.rgbBlue));
+
+    dst_val = rgb_to_pixel_mono( dib, FALSE, x, y, RGB(r, g, b), bg_pixel, r, g, b );
+    if (bit_pos == 0)
+        *ptr = 0;
+    *ptr = (*ptr & ~pixel_masks_1[bit_pos]) | (dst_val & pixel_masks_1[bit_pos]);
+}
+
+static void set_colorref_null(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b)
+{
+}
+
 const primitive_funcs funcs_8888 =
 {
     solid_rects_32,
@@ -7442,6 +7514,7 @@ const primitive_funcs funcs_8888 =
     draw_glyph_8888,
     draw_subpixel_glyph_8888,
     get_pixel_32,
+    set_colorref_888,
     colorref_to_pixel_888,
     pixel_to_colorref_888,
     convert_to_8888,
@@ -7463,6 +7536,7 @@ const primitive_funcs funcs_32 =
     draw_glyph_32,
     draw_subpixel_glyph_32,
     get_pixel_32,
+    set_colorref_32,
     colorref_to_pixel_masks,
     pixel_to_colorref_masks,
     convert_to_32,
@@ -7484,6 +7558,7 @@ const primitive_funcs funcs_24 =
     draw_glyph_24,
     draw_subpixel_glyph_24,
     get_pixel_24,
+    set_colorref_24,
     colorref_to_pixel_888,
     pixel_to_colorref_888,
     convert_to_24,
@@ -7505,6 +7580,7 @@ const primitive_funcs funcs_555 =
     draw_glyph_555,
     draw_subpixel_glyph_555,
     get_pixel_16,
+    set_pixel_555,
     colorref_to_pixel_555,
     pixel_to_colorref_555,
     convert_to_555,
@@ -7526,6 +7602,7 @@ const primitive_funcs funcs_16 =
     draw_glyph_16,
     draw_subpixel_glyph_16,
     get_pixel_16,
+    set_colorref_16,
     colorref_to_pixel_masks,
     pixel_to_colorref_masks,
     convert_to_16,
@@ -7547,6 +7624,7 @@ const primitive_funcs funcs_8 =
     draw_glyph_8,
     draw_subpixel_glyph_null,
     get_pixel_8,
+    set_colorref_8,
     colorref_to_pixel_colortable,
     pixel_to_colorref_colortable,
     convert_to_8,
@@ -7568,6 +7646,7 @@ const primitive_funcs funcs_4 =
     draw_glyph_4,
     draw_subpixel_glyph_null,
     get_pixel_4,
+    set_colorref_4,
     colorref_to_pixel_colortable,
     pixel_to_colorref_colortable,
     convert_to_4,
@@ -7589,6 +7668,7 @@ const primitive_funcs funcs_1 =
     draw_glyph_1,
     draw_subpixel_glyph_null,
     get_pixel_1,
+    set_colorref_1,
     colorref_to_pixel_colortable,
     pixel_to_colorref_colortable,
     convert_to_1,
@@ -7610,6 +7690,7 @@ const primitive_funcs funcs_null =
     draw_glyph_null,
     draw_subpixel_glyph_null,
     get_pixel_null,
+    set_colorref_null,
     colorref_to_pixel_null,
     pixel_to_colorref_null,
     convert_to_null,

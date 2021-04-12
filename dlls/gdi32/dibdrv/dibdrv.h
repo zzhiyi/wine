@@ -199,6 +199,7 @@ typedef struct primitive_funcs
     void    (* draw_subpixel_glyph)(const dib_info *dst, const RECT *rc, const dib_info *glyph,
                                     const POINT *origin, DWORD text_pixel, const struct font_gamma_ramp *gamma_ramp);
     DWORD             (* get_pixel)(const dib_info *dib, int x, int y);
+    void           (* set_colorref)(const dib_info *dib, int x, int y, BYTE r, BYTE g, BYTE b);
     DWORD     (* colorref_to_pixel)(const dib_info *dib, COLORREF color);
     COLORREF  (* pixel_to_colorref)(const dib_info *dib, DWORD pixel);
     void             (* convert_to)(dib_info *dst, const dib_info *src, const RECT *src_rect, BOOL dither);

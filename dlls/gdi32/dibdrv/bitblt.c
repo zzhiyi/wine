@@ -1193,6 +1193,88 @@ static DWORD calc_1d_stretch_params( INT dst_start, INT dst_length, INT dst_vis_
     return ERROR_SUCCESS;
 }
 
+static float clampf(float value, float min, float max)
+{
+    return max( min, min( value, max ) );
+}
+
+static int clamp(int value, int min, int max)
+{
+    return max( min, min( value, max ) );
+}
+
+static BYTE linear_interpolate(BYTE s, BYTE e, float d)
+{
+    return s + (e - s) * d + 0.5f;
+}
+
+static BYTE bilinear_interpolate(BYTE c00, BYTE c01, BYTE c10, BYTE c11, float dx, float dy)
+{
+    return linear_interpolate( linear_interpolate( c00, c01, dx ),
+                               linear_interpolate( c10, c11, dx ), dy );
+}
+
+static void halftone(const dib_info *dst_dib, struct bitblt_coords *dst,
+                     const dib_info *src_dib, struct bitblt_coords *src)
+{
+    int src_start_x, src_start_y, dst_x, dst_y, x0, x1, y0, y1;
+    int left_most, right_most, top_most, bottom_most;
+    int src_width, src_height, dst_width, dst_height;
+    float float_x, float_y, dx, dy, inc_x, inc_y;
+    BOOL mirrored_x, mirrored_y;
+    COLORREF c00, c01, c10, c11;
+    RECT src_rect, dst_rect;
+    BYTE r, g, b;
+
+    get_bounding_rect( &src_rect, src->x, src->y, src->width, src->height );
+    get_bounding_rect( &dst_rect, dst->x, dst->y, dst->width, dst->height );
+    intersect_rect( &src_rect, &src->visrect, &src_rect );
+    intersect_rect( &dst_rect, &dst->visrect, &dst_rect );
+    offset_rect( &dst_rect, -dst_rect.left, -dst_rect.top );
+
+    left_most = src_rect.left;
+    right_most = src_rect.right - 1;
+    top_most = src_rect.top;
+    bottom_most = src_rect.bottom - 1;
+
+    src_width = src_rect.right - src_rect.left;
+    src_height = src_rect.bottom - src_rect.top;
+    dst_width = dst_rect.right - dst_rect.left;
+    dst_height = dst_rect.bottom - dst_rect.top;
+
+    mirrored_x = (dst->width < 0) != (src->width < 0);
+    mirrored_y = (dst->height < 0) != (src->height < 0);
+    src_start_x = mirrored_x ? right_most : left_most;
+    src_start_y = mirrored_y ? bottom_most : top_most;
+    inc_x = mirrored_x ? -(float)src_width / dst_width : (float)src_width / dst_width;
+    inc_y = mirrored_y ? -(float)src_height / dst_height : (float)src_height / dst_height;
+
+    for (dst_y = dst_rect.top; dst_y < dst_rect.bottom; ++dst_y)
+    {
+        for (dst_x = dst_rect.left; dst_x < dst_rect.right; ++dst_x)
+        {
+            float_x = src_start_x + (dst_x - dst_rect.left) * inc_x;
+            float_y = src_start_y + (dst_y - dst_rect.top) * inc_y;
+            float_x = clampf(float_x, left_most, right_most);
+            float_y = clampf(float_y, top_most, bottom_most);
+            x0 = float_x;
+            y0 = float_y;
+            x1 = clamp(x0 + 1, left_most, right_most);
+            y1 = clamp(y0 + 1, top_most, bottom_most);
+            dx = float_x - x0;
+            dy = float_y - y0;
+
+            c00 = src_dib->funcs->pixel_to_colorref(src_dib, src_dib->funcs->get_pixel(src_dib, x0, y0));
+            c01 = src_dib->funcs->pixel_to_colorref(src_dib, src_dib->funcs->get_pixel(src_dib, x1, y0));
+            c10 = src_dib->funcs->pixel_to_colorref(src_dib, src_dib->funcs->get_pixel(src_dib, x0, y1));
+            c11 = src_dib->funcs->pixel_to_colorref(src_dib, src_dib->funcs->get_pixel(src_dib, x1, y1));
+            r = bilinear_interpolate(GetRValue(c00), GetRValue(c01), GetRValue(c10), GetRValue(c11), dx, dy);
+            g = bilinear_interpolate(GetGValue(c00), GetGValue(c01), GetGValue(c10), GetGValue(c11), dx, dy);
+            b = bilinear_interpolate(GetBValue(c00), GetBValue(c01), GetBValue(c10), GetBValue(c11), dx, dy);
+            dst_dib->funcs->set_colorref(dst_dib, dst_x, dst_y, r, g, b);
+        }
+    }
+}
 
 DWORD stretch_bitmapinfo( const BITMAPINFO *src_info, void *src_bits, struct bitblt_coords *src,
                           const BITMAPINFO *dst_info, void *dst_bits, struct bitblt_coords *dst,
@@ -1215,6 +1297,12 @@ DWORD stretch_bitmapinfo( const BITMAPINFO *src_info, void *src_bits, struct bit
 
     init_dib_info_from_bitmapinfo( &src_dib, src_info, src_bits );
     init_dib_info_from_bitmapinfo( &dst_dib, dst_info, dst_bits );
+
+    if (mode == HALFTONE)
+    {
+        halftone( &dst_dib, dst, &src_dib, src );
+        goto done;
+    }
 
     /* v */
     ret = calc_1d_stretch_params( dst->y, dst->height, dst->visrect.top, dst->visrect.bottom,
@@ -1300,6 +1388,7 @@ DWORD stretch_bitmapinfo( const BITMAPINFO *src_info, void *src_bits, struct bit
         }
     }
 
+done:
     /* update coordinates, the destination rectangle is always stored at 0,0 */
     *src = *dst;
     src->x -= src->visrect.left;
