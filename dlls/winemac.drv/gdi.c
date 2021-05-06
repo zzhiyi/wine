@@ -240,9 +240,6 @@ static INT CDECL macdrv_GetDeviceCaps(PHYSDEV dev, INT cap)
     case VERTSIZE:
         ret = vert_size;
         break;
-    case BITSPIXEL:
-        ret = bits_per_pixel;
-        break;
     case HORZRES:
     case VERTRES:
     default:
