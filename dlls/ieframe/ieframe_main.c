@@ -17,6 +17,7 @@
  */
 
 #include "ieframe.h"
+#include <commctrl.h>
 
 #include "initguid.h"
 #include "rpcproxy.h"
@@ -189,6 +190,7 @@ BOOL WINAPI DllMain(HINSTANCE hInstDLL, DWORD fdwReason, LPVOID lpv)
     {
     case DLL_PROCESS_ATTACH:
         ieframe_instance = hInstDLL;
+        InitCommonControls();
         register_iewindow_class();
         DisableThreadLibraryCalls(ieframe_instance);
         break;
