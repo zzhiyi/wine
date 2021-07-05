@@ -2729,6 +2729,12 @@ struct enum_monitor_entry
 @END
 
 
+/* Set the work area of the primary monitor */
+@REQ(set_primary_work_area)
+    rectangle_t   work_rect;      /* new work area rectangle */
+@END
+
+
 /* Register a hotkey */
 @REQ(register_hotkey)
     user_handle_t  window;        /* handle to the window */

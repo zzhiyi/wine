@@ -169,6 +169,20 @@ static BOOL CALLBACK get_primary_monitor_proc(HMONITOR monitor, HDC hdc, LPRECT 
     return TRUE;
 }
 
+static BOOL CALLBACK get_primary_work_area_proc(HMONITOR monitor, HDC hdc, LPRECT rect, LPARAM lp)
+{
+    RECT *work_rect = (RECT *)lp;
+    MONITORINFO mi;
+
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(monitor, &mi) && mi.dwFlags & MONITORINFOF_PRIMARY)
+    {
+        *work_rect = mi.rcWork;
+        return FALSE;
+    }
+    return TRUE;
+}
+
 RECT get_virtual_screen_rect(void)
 {
     RECT rect = {0};
@@ -183,6 +197,33 @@ RECT get_primary_monitor_rect(void)
 
     EnumDisplayMonitors(0, NULL, get_primary_monitor_proc, (LPARAM)&rect);
     return rect;
+}
+
+RECT get_primary_work_area(void)
+{
+    RECT rect = {0};
+
+    EnumDisplayMonitors(0, NULL, get_primary_work_area_proc, (LPARAM)&rect);
+    return rect;
+}
+
+BOOL set_primary_work_area(const RECT *work_area)
+{
+    BOOL ret;
+
+    SERVER_START_REQ(set_primary_work_area)
+    {
+        req->work_rect.top = work_area->top;
+        req->work_rect.left = work_area->left;
+        req->work_rect.right = work_area->right;
+        req->work_rect.bottom = work_area->bottom;
+        ret = !wine_server_call(req);
+    }
+    SERVER_END_REQ;
+
+    if (!ret)
+        WARN("setting the primary work area to %s failed!\n", wine_dbgstr_rect(work_area));
+    return ret;
 }
 
 /* Get the primary monitor rect from the host system */
@@ -700,6 +741,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
     INT gpu_count, adapter_count, monitor_count;
     INT gpu, adapter, monitor;
     HDEVINFO gpu_devinfo = NULL, monitor_devinfo = NULL;
+    RECT old_primary_work_area = {0}, old_primary_rect = {0};
     struct server_monitor_info info = {0};
     HKEY video_hkey = NULL;
     INT video_index = 0;
@@ -724,6 +766,13 @@ void X11DRV_DisplayDevices_Init(BOOL force)
 
     TRACE("via %s\n", wine_dbgstr_a(handler->name));
 
+    /* Get the old primary monitor rectangle and primary work area only if they are valid and not
+     * from the previous boot */
+    if (disposition != REG_CREATED_NEW_KEY)
+    {
+        old_primary_rect = get_primary_monitor_rect();
+        old_primary_work_area = get_primary_work_area();
+    }
     prepare_devices(video_hkey);
 
     gpu_devinfo = SetupDiCreateDeviceInfoList(&GUID_DEVCLASS_DISPLAY, NULL);
@@ -757,7 +806,22 @@ void X11DRV_DisplayDevices_Init(BOOL force)
             /* Initialize monitors */
             for (monitor = 0; monitor < monitor_count; monitor++)
             {
-                TRACE("monitor: %#x %s\n", monitor, wine_dbgstr_w(monitors[monitor].name));
+                /* Override the primary work area if it was set by SystemParametersInfo(SPI_SETWORKAREA) */
+                if (video_index == 0)
+                {
+                    if (EqualRect(&monitors[monitor].rc_monitor, &old_primary_rect)
+                            && !EqualRect(&monitors[monitor].rc_work, &old_primary_work_area))
+                    {
+                        TRACE("monitor: %#x overriding work area %s with %s.\n", monitor,
+                                wine_dbgstr_rect(&monitors[monitor].rc_work),
+                                wine_dbgstr_rect(&old_primary_work_area));
+                        monitors[monitor].rc_work = old_primary_work_area;
+                    }
+                }
+
+                TRACE("monitor: %#x %s %s %s\n", monitor, wine_dbgstr_w(monitors[monitor].name),
+                        wine_dbgstr_rect(&monitors[monitor].rc_monitor),
+                        wine_dbgstr_rect(&monitors[monitor].rc_work));
                 if (!X11DRV_InitMonitor(monitor_devinfo, &monitors[monitor], monitor, video_index, &gpu_luid, output_id++))
                     goto done;
 

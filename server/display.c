@@ -128,3 +128,19 @@ DECL_HANDLER(enum_monitors)
         ++i;
     }
 }
+
+/* Set the work area of the primary monitor */
+DECL_HANDLER(set_primary_work_area)
+{
+    struct monitor *monitor;
+
+    LIST_FOR_EACH_ENTRY(monitor, &monitor_list, struct monitor, entry)
+    {
+        if (!monitor->monitor_rect.top && !monitor->monitor_rect.left
+            && monitor->monitor_rect.right && monitor->monitor_rect.bottom)
+        {
+            monitor->work_rect = req->work_rect;
+            return;
+        }
+    }
+}
