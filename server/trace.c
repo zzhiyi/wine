@@ -3474,6 +3474,11 @@ static void dump_enum_monitors_reply( const struct enum_monitors_reply *req )
     dump_varargs_enum_monitor_entry( ", monitors=", cur_size );
 }
 
+static void dump_set_primary_work_area_request( const struct set_primary_work_area_request *req )
+{
+    dump_rectangle( " work_rect=", &req->work_rect );
+}
+
 static void dump_register_hotkey_request( const struct register_hotkey_request *req )
 {
     fprintf( stderr, " window=%08x", req->window );
@@ -4795,6 +4800,7 @@ static const dump_func req_dumpers[REQ_NB_REQUESTS] = {
     (dump_func)dump_update_monitors_request,
     (dump_func)dump_get_monitor_info_request,
     (dump_func)dump_enum_monitors_request,
+    (dump_func)dump_set_primary_work_area_request,
     (dump_func)dump_register_hotkey_request,
     (dump_func)dump_unregister_hotkey_request,
     (dump_func)dump_attach_thread_input_request,
@@ -5075,6 +5081,7 @@ static const dump_func reply_dumpers[REQ_NB_REQUESTS] = {
     NULL,
     (dump_func)dump_get_monitor_info_reply,
     (dump_func)dump_enum_monitors_reply,
+    NULL,
     (dump_func)dump_register_hotkey_reply,
     (dump_func)dump_unregister_hotkey_reply,
     NULL,
@@ -5355,6 +5362,7 @@ static const char * const req_names[REQ_NB_REQUESTS] = {
     "update_monitors",
     "get_monitor_info",
     "enum_monitors",
+    "set_primary_work_area",
     "register_hotkey",
     "unregister_hotkey",
     "attach_thread_input",

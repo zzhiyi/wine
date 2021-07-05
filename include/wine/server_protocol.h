@@ -3778,6 +3778,19 @@ struct enum_monitors_reply
 
 
 
+struct set_primary_work_area_request
+{
+    struct request_header __header;
+    rectangle_t   work_rect;
+    char __pad_28[4];
+};
+struct set_primary_work_area_reply
+{
+    struct reply_header __header;
+};
+
+
+
 struct register_hotkey_request
 {
     struct request_header __header;
@@ -5645,6 +5658,7 @@ enum request
     REQ_update_monitors,
     REQ_get_monitor_info,
     REQ_enum_monitors,
+    REQ_set_primary_work_area,
     REQ_register_hotkey,
     REQ_unregister_hotkey,
     REQ_attach_thread_input,
@@ -5929,6 +5943,7 @@ union generic_request
     struct update_monitors_request update_monitors_request;
     struct get_monitor_info_request get_monitor_info_request;
     struct enum_monitors_request enum_monitors_request;
+    struct set_primary_work_area_request set_primary_work_area_request;
     struct register_hotkey_request register_hotkey_request;
     struct unregister_hotkey_request unregister_hotkey_request;
     struct attach_thread_input_request attach_thread_input_request;
@@ -6211,6 +6226,7 @@ union generic_reply
     struct update_monitors_reply update_monitors_reply;
     struct get_monitor_info_reply get_monitor_info_reply;
     struct enum_monitors_reply enum_monitors_reply;
+    struct set_primary_work_area_reply set_primary_work_area_reply;
     struct register_hotkey_reply register_hotkey_reply;
     struct unregister_hotkey_reply unregister_hotkey_reply;
     struct attach_thread_input_reply attach_thread_input_reply;
