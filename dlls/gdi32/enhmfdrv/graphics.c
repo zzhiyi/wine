@@ -880,6 +880,8 @@ BOOL CDECL EMFDRV_ExtTextOut( PHYSDEV dev, INT x, INT y, UINT flags, const RECT 
                 textHeight = max(textHeight, charSize.cy);
             }
         }
+
+        pemr->emrtext.offDx = 0;
     }
 
     if (physDev->path)
