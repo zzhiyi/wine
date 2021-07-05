@@ -1435,6 +1435,44 @@ static void dump_varargs_poll_socket_output( const char *prefix, data_size_t siz
     fputc( '}', stderr );
 }
 
+static void dump_varargs_update_monitor_entry( const char *prefix, data_size_t size )
+{
+    const struct update_monitor_entry *entry;
+
+    fprintf( stderr, "%s{", prefix );
+    while (size >= sizeof(*entry))
+    {
+        entry = cur_data;
+        dump_rectangle( "{monitor_rect=", &entry->monitor_rect );
+        dump_rectangle( ",work_rect=", &entry->work_rect );
+        fprintf( stderr, ",adapter_name=L\"" );
+        dump_strW( entry->adapter_name, entry->adapter_name_len, stderr, "\"\"" );
+        fprintf( stderr, "\"}" );
+        size -= sizeof(*entry);
+        remove_data( sizeof(*entry) );
+        if (size) fputc( ',', stderr );
+    }
+    fputc( '}', stderr );
+}
+
+static void dump_varargs_enum_monitor_entry( const char *prefix, data_size_t size )
+{
+    const struct enum_monitor_entry *entry;
+
+    fprintf( stderr, "%s{", prefix );
+    while (size >= sizeof(*entry))
+    {
+        entry = cur_data;
+        fprintf( stderr, "{handle=%08x", entry->handle );
+        dump_rectangle( ",monitor_rect=", &entry->monitor_rect );
+        fputc( '}', stderr );
+        size -= sizeof(*entry);
+        remove_data( sizeof(*entry) );
+        if (size) fputc( ',', stderr );
+    }
+    fputc( '}', stderr );
+}
+
 typedef void (*dump_func)( const void *req );
 
 /* Everything below this line is generated automatically by tools/make_requests */

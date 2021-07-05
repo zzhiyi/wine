@@ -34,6 +34,8 @@
 #define WIN32_NO_STATUS
 #include "winternl.h"
 #include "wine/debug.h"
+#include "wine/heap.h"
+#include "wine/server.h"
 #include "wine/unicode.h"
 #include "x11drv.h"
 
@@ -47,7 +49,6 @@ DEFINE_DEVPROPKEY(DEVPROPKEY_MONITOR_OUTPUT_ID, 0xca085853, 0x16ce, 0x48aa, 0xb1
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_GPU_VULKAN_UUID, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5c, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_STATEFLAGS, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 2);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCMONITOR, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 3);
-DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_RCWORK, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 4);
 DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4abd, 0xb5, 0x64, 0xc3, 0x2f, 0x21, 0xf1, 0x53, 0x5b, 5);
 
 static const WCHAR driver_date_dataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
@@ -625,10 +626,6 @@ static BOOL X11DRV_InitMonitor(HDEVINFO devinfo, const struct x11drv_monitor *mo
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCMONITOR, DEVPROP_TYPE_BINARY,
                                    (const BYTE *)&monitor->rc_monitor, sizeof(monitor->rc_monitor), 0))
         goto done;
-    /* RcWork */
-    if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_RCWORK, DEVPROP_TYPE_BINARY,
-                                   (const BYTE *)&monitor->rc_work, sizeof(monitor->rc_work), 0))
-        goto done;
     /* Adapter name */
     length = sprintfW(bufferW, adapter_name_fmtW, video_index + 1);
     if (!SetupDiSetDevicePropertyW(devinfo, &device_data, &WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, DEVPROP_TYPE_STRING,
@@ -697,6 +694,62 @@ static void cleanup_devices(void)
     SetupDiDestroyDeviceInfoList(devinfo);
 }
 
+/* Wine server monitor list management */
+
+struct server_monitor_info
+{
+    unsigned int entry_count;
+    unsigned int entry_capacity;
+    struct update_monitor_entry *entries;
+};
+
+static BOOL server_add_monitor_info(struct server_monitor_info *info,
+                                    const struct x11drv_monitor *monitor, int adapter_index)
+{
+    struct update_monitor_entry *entry, *new_entries;
+    unsigned int length;
+
+    if (info->entry_count <= info->entry_capacity)
+        info->entry_capacity = info->entry_capacity ? info->entry_capacity * 2 : 2;
+
+    if (info->entries)
+        new_entries = heap_realloc(info->entries, info->entry_capacity * sizeof(*new_entries));
+    else
+        new_entries = heap_calloc(info->entry_capacity, sizeof(*new_entries));
+
+    if (!new_entries)
+        return FALSE;
+
+    info->entries = new_entries;
+    entry = &info->entries[info->entry_count++];
+    entry->monitor_rect.top = monitor->rc_monitor.top;
+    entry->monitor_rect.left = monitor->rc_monitor.left;
+    entry->monitor_rect.right = monitor->rc_monitor.right;
+    entry->monitor_rect.bottom = monitor->rc_monitor.bottom;
+    entry->work_rect.top = monitor->rc_work.top;
+    entry->work_rect.left = monitor->rc_work.left;
+    entry->work_rect.right = monitor->rc_work.right;
+    entry->work_rect.bottom = monitor->rc_work.bottom;
+    length = sprintfW(entry->adapter_name, adapter_name_fmtW, adapter_index + 1);
+    entry->adapter_name_len = length * sizeof(WCHAR);
+    return TRUE;
+}
+
+static void server_submit_monitor_info(const struct server_monitor_info *info)
+{
+    unsigned int status;
+
+    SERVER_START_REQ(update_monitors)
+    {
+        wine_server_add_data(req, info->entries, info->entry_count * sizeof(*info->entries));
+        status = wine_server_call(req);
+    }
+    SERVER_END_REQ;
+
+    if (status)
+        ERR("Failed to update the monitor list in the wine server, status %#x\n", status);
+}
+
 void X11DRV_DisplayDevices_Init(BOOL force)
 {
     HANDLE mutex;
@@ -707,6 +760,7 @@ void X11DRV_DisplayDevices_Init(BOOL force)
     INT gpu_count, adapter_count, monitor_count;
     INT gpu, adapter, monitor;
     HDEVINFO gpu_devinfo = NULL, monitor_devinfo = NULL;
+    struct server_monitor_info info = {0};
     HKEY video_hkey = NULL;
     INT video_index = 0;
     DWORD disposition = 0;
@@ -766,6 +820,13 @@ void X11DRV_DisplayDevices_Init(BOOL force)
                 TRACE("monitor: %#x %s\n", monitor, wine_dbgstr_w(monitors[monitor].name));
                 if (!X11DRV_InitMonitor(monitor_devinfo, &monitors[monitor], monitor, video_index, &gpu_luid, output_id++))
                     goto done;
+
+                /* EnumDisplayMonitors() doesn't enumerate mirrored replicas and inactive monitors */
+                if (monitor != 0 || !(monitors[monitor].state_flags & DISPLAY_DEVICE_ACTIVE))
+                    continue;
+
+                if (!server_add_monitor_info(&info, &monitors[monitor], video_index))
+                    goto done;
             }
 
             handler->free_monitors(monitors);
@@ -777,7 +838,10 @@ void X11DRV_DisplayDevices_Init(BOOL force)
         adapters = NULL;
     }
 
+    server_submit_monitor_info(&info);
+
 done:
+    heap_free(info.entries);
     cleanup_devices();
     SetupDiDestroyDeviceInfoList(monitor_devinfo);
     SetupDiDestroyDeviceInfoList(gpu_devinfo);

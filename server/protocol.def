@@ -2690,6 +2690,45 @@ enum coords_relative
 #define SET_USER_OBJECT_GET_FULL_NAME   2
 
 
+struct update_monitor_entry
+{
+    rectangle_t    monitor_rect;     /* monitor rectangle */
+    rectangle_t    work_rect;        /* monitor work area rectangle */
+    WCHAR          adapter_name[32]; /* adapter name */
+    data_size_t    adapter_name_len; /* adapter name length in bytes */
+};
+
+struct enum_monitor_entry
+{
+    user_handle_t  handle;         /* handle to the monitor */
+    rectangle_t    monitor_rect;   /* monitor rectangle */
+};
+
+
+/* Modify the list of monitors */
+@REQ(update_monitors)
+    VARARG(monitors,update_monitor_entry); /* A list of monitors to be created */
+@END
+
+
+/* Get information about a monitor */
+@REQ(get_monitor_info)
+    user_handle_t  handle;         /* handle to the monitor */
+@REPLY
+    rectangle_t    monitor_rect;   /* monitor rectangle */
+    rectangle_t    work_rect;      /* monitor work area rectangle */
+    VARARG(adapter,unicode_str);   /* adapter name */
+@END
+
+
+/* Enumerate monitors */
+@REQ(enum_monitors)
+@REPLY
+    unsigned int   count;          /* total count of monitors */
+    VARARG(monitors,enum_monitor_entry); /* A list of monitors enumerated */
+@END
+
+
 /* Register a hotkey */
 @REQ(register_hotkey)
     user_handle_t  window;        /* handle to the window */

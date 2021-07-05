@@ -46,6 +46,7 @@
 #include "win.h"
 #include "user_private.h"
 #include "wine/gdi_driver.h"
+#include "wine/server.h"
 #include "wine/asm.h"
 #include "wine/debug.h"
 
@@ -3974,8 +3975,34 @@ fail:
 BOOL CDECL nulldrv_GetMonitorInfo( HMONITOR handle, MONITORINFO *info )
 {
     UINT index = (UINT_PTR)handle - 1;
+    NTSTATUS status;
 
     TRACE("(%p, %p)\n", handle, info);
+
+    SERVER_START_REQ( get_monitor_info )
+    {
+        req->handle = wine_server_user_handle( handle );
+        if (info->cbSize == sizeof(MONITORINFOEXW))
+            wine_server_set_reply( req, ((MONITORINFOEXW *)info)->szDevice,
+                                   sizeof(((MONITORINFOEXW *)info)->szDevice) - sizeof(WCHAR) );
+        if (!(status = wine_server_call( req )))
+        {
+            SetRect( &info->rcMonitor, reply->monitor_rect.left, reply->monitor_rect.top,
+                     reply->monitor_rect.right, reply->monitor_rect.bottom );
+            SetRect( &info->rcWork, reply->work_rect.left, reply->work_rect.top,
+                     reply->work_rect.right, reply->work_rect.bottom );
+            if (!info->rcMonitor.left && !info->rcMonitor.top && info->rcMonitor.right && info->rcMonitor.bottom)
+                info->dwFlags = MONITORINFOF_PRIMARY;
+            else
+                info->dwFlags = 0;
+            if (info->cbSize == sizeof(MONITORINFOEXW))
+                ((MONITORINFOEXW *)info)->szDevice[wine_server_reply_size( req ) / sizeof(WCHAR)] = 0;
+        }
+    }
+    SERVER_END_REQ;
+
+    if (!status)
+        return TRUE;
 
     /* Fallback to report one monitor */
     if (handle == NULLDRV_DEFAULT_HMONITOR)
@@ -3990,7 +4017,10 @@ BOOL CDECL nulldrv_GetMonitorInfo( HMONITOR handle, MONITORINFO *info )
     }
 
     if (!update_monitor_cache())
+    {
+        SetLastError( ERROR_INVALID_MONITOR_HANDLE );
         return FALSE;
+    }
 
     EnterCriticalSection( &monitors_section );
     if (index < monitor_count)
@@ -4111,10 +4141,62 @@ static BOOL CALLBACK enum_mon_callback( HMONITOR monitor, HDC hdc, LPRECT rect, 
 
 BOOL CDECL nulldrv_EnumDisplayMonitors( HDC hdc, RECT *rect, MONITORENUMPROC proc, LPARAM lp )
 {
+    struct enum_monitor_entry entries[4], *entry_ptr;
+    unsigned int status, count, entry_count;
     RECT monitor_rect;
+    HMONITOR monitor;
     DWORD i = 0;
 
     TRACE("(%p, %p, %p, 0x%lx)\n", hdc, rect, proc, lp);
+
+    entry_count = ARRAY_SIZE(entries);
+    entry_ptr = entries;
+    while (TRUE)
+    {
+        SERVER_START_REQ(enum_monitors)
+        {
+            wine_server_set_reply( req, entry_ptr, entry_count * sizeof(*entry_ptr) );
+            status = wine_server_call( req );
+            count = reply->count;
+        }
+        SERVER_END_REQ;
+
+        if (!status)
+        {
+            for (i = 0; i < count; ++i)
+            {
+                monitor = wine_server_ptr_handle( entry_ptr[i].handle );
+                monitor_rect.top = entry_ptr[i].monitor_rect.top;
+                monitor_rect.left = entry_ptr[i].monitor_rect.left;
+                monitor_rect.right = entry_ptr[i].monitor_rect.right;
+                monitor_rect.bottom = entry_ptr[i].monitor_rect.bottom;
+                if (!proc( monitor, hdc, &monitor_rect, lp ))
+                {
+                    if (entry_ptr != entries)
+                        heap_free( entry_ptr );
+                    return FALSE;
+                }
+            }
+
+            if (count)
+            {
+                if (entry_ptr != entries)
+                    heap_free( entry_ptr );
+                return TRUE;
+            }
+        }
+
+        if (entry_ptr != entries)
+            heap_free( entry_ptr );
+
+        if (count <= entry_count)
+            break;
+
+        entry_count = count;
+        entry_ptr = heap_calloc( entry_count, sizeof(*entry_ptr) );
+        if (!entry_ptr)
+            break;
+    }
 
     if (update_monitor_cache())
     {
