@@ -2459,10 +2459,6 @@ static HRESULT STDMETHODCALLTYPE d3d12_swapchain_GetContainingOutput(IDXGISwapCh
         IDXGIOutput **output)
 {
     struct d3d12_swapchain *swapchain = d3d12_swapchain_from_IDXGISwapChain4(iface);
-    IUnknown *device_parent;
-    IWineDXGIFactory *factory;
-    IDXGIAdapter *adapter;
-    HRESULT hr;
 
     TRACE("iface %p, output %p.\n", iface, output);
 
@@ -2472,25 +2468,7 @@ static HRESULT STDMETHODCALLTYPE d3d12_swapchain_GetContainingOutput(IDXGISwapCh
         return S_OK;
     }
 
-    device_parent = vkd3d_get_device_parent(swapchain->device);
-
-    if (FAILED(hr = IUnknown_QueryInterface(device_parent, &IID_IDXGIAdapter, (void **)&adapter)))
-    {
-        WARN("Failed to get adapter, hr %#x.\n", hr);
-        return hr;
-    }
-
-    if (FAILED(hr = IDXGIAdapter_GetParent(adapter, &IID_IWineDXGIFactory, (void **)&factory)))
-    {
-        WARN("Failed to get factory, hr %#x.\n", hr);
-        IDXGIAdapter_Release(adapter);
-        return hr;
-    }
-
-    hr = dxgi_get_output_from_window(factory, swapchain->window, output);
-    IWineDXGIFactory_Release(factory);
-    IDXGIAdapter_Release(adapter);
-    return hr;
+    return dxgi_get_output_from_window((IDXGIFactory *)swapchain->factory, swapchain->window, output);
 }
 
 static HRESULT STDMETHODCALLTYPE d3d12_swapchain_GetFrameStatistics(IDXGISwapChain4 *iface,
