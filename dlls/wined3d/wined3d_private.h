@@ -3412,6 +3412,7 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
         const struct wined3d_adapter_ops *adapter_ops) DECLSPEC_HIDDEN;
 void wined3d_adapter_cleanup(struct wined3d_adapter *adapter) DECLSPEC_HIDDEN;
 BOOL wined3d_get_primary_adapter_luid(LUID *luid) DECLSPEC_HIDDEN;
+BOOL wined3d_get_primary_display(WCHAR *display) DECLSPEC_HIDDEN;
 
 struct wined3d_adapter_gl
 {
@@ -3604,7 +3605,7 @@ struct wined3d
     LONG ref;
     unsigned int flags;
     unsigned int adapter_count;
-    struct wined3d_adapter *adapters[1];
+    struct wined3d_adapter **adapters;
 };
 
 BOOL wined3d_filter_messages(HWND window, BOOL filter) DECLSPEC_HIDDEN;

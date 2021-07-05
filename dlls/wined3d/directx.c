@@ -193,6 +193,7 @@ ULONG CDECL wined3d_decref(struct wined3d *wined3d)
 
             adapter->adapter_ops->adapter_destroy(adapter);
         }
+        heap_free(wined3d->adapters);
         heap_free(wined3d);
     }
 
@@ -3109,6 +3110,9 @@ static struct wined3d_adapter *wined3d_adapter_no3d_create(unsigned int ordinal,
 
     TRACE("ordinal %u, wined3d_creation_flags %#x.\n", ordinal, wined3d_creation_flags);
 
+    if (ordinal > 0)
+        return NULL;
+
     if (!(adapter = heap_alloc_zero(sizeof(*adapter))))
         return NULL;
 
@@ -3182,13 +3186,20 @@ static BOOL wined3d_adapter_create_output(struct wined3d_adapter *adapter, const
 BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal, const LUID *luid,
         const struct wined3d_adapter_ops *adapter_ops)
 {
+    D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open_adapter_param;
     unsigned int output_idx = 0, primary_idx = 0;
+    D3DKMT_CLOSEADAPTER close_adapter_param;
     DISPLAY_DEVICEW display_device;
     BOOL ret = FALSE;
+    NTSTATUS status;
 
+    memset(&adapter->driver_uuid, 0, sizeof(adapter->driver_uuid));
+    memset(&adapter->device_uuid, 0, sizeof(adapter->device_uuid));
+    adapter->adapter_ops = adapter_ops;
     adapter->ordinal = ordinal;
     adapter->output_count = 0;
     adapter->outputs = NULL;
+    adapter->formats = NULL;
 
     if (luid)
     {
@@ -3205,11 +3216,28 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
     }
     TRACE("adapter %p LUID %08x:%08x.\n", adapter, adapter->luid.HighPart, adapter->luid.LowPart);
 
+    /* Corresponding outputs cannot be found with a random LUID */
+    if (!luid)
+    {
+        ret = TRUE;
+        goto done;
+    }
+
     display_device.cb = sizeof(display_device);
     while (EnumDisplayDevicesW(NULL, output_idx++, &display_device, 0))
     {
         /* Detached outputs are not enumerated */
         if (!(display_device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
+            continue;
+
+        lstrcpyW(open_adapter_param.DeviceName, display_device.DeviceName);
+        status = D3DKMTOpenAdapterFromGdiDisplayName(&open_adapter_param);
+        if (status != STATUS_SUCCESS)
+            continue;
+
+        close_adapter_param.hAdapter = open_adapter_param.hAdapter;
+        D3DKMTCloseAdapter(&close_adapter_param);
+        if (memcmp(&adapter->luid, &open_adapter_param.AdapterLuid, sizeof(LUID)))
             continue;
 
         if (display_device.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)
@@ -3230,11 +3258,6 @@ BOOL wined3d_adapter_init(struct wined3d_adapter *adapter, unsigned int ordinal,
         adapter->outputs[primary_idx].ordinal = primary_idx;
     }
 
-    memset(&adapter->driver_uuid, 0, sizeof(adapter->driver_uuid));
-    memset(&adapter->device_uuid, 0, sizeof(adapter->device_uuid));
-
-    adapter->formats = NULL;
-    adapter->adapter_ops = adapter_ops;
     ret = TRUE;
 done:
     if (!ret)
@@ -3266,17 +3289,100 @@ const struct wined3d_parent_ops wined3d_null_parent_ops =
 
 HRESULT wined3d_init(struct wined3d *wined3d, DWORD flags)
 {
+    unsigned int adapter_idx, output_idx, primary_idx = 0, device_idx = 0;
+    struct wined3d_adapter *adapter, **adapters;
+    WCHAR primary_display[CCHDEVICENAME];
+    DISPLAY_DEVICEW display_device;
+    HRESULT hr = E_FAIL;
+    BOOL found;
+
     wined3d->ref = 1;
     wined3d->flags = flags;
+    wined3d->adapters = NULL;
+    wined3d->adapter_count = 0;
 
     TRACE("Initialising adapters.\n");
 
-    if (!(wined3d->adapters[0] = wined3d_adapter_create(0, flags)))
+    if (!wined3d_get_primary_display(primary_display))
     {
-        WARN("Failed to create adapter.\n");
-        return E_FAIL;
+        ERR("Failed to get primary display.\n");
+        return hr;
     }
-    wined3d->adapter_count = 1;
 
-    return WINED3D_OK;
+    while ((adapter = wined3d_adapter_create(wined3d->adapter_count, flags)))
+    {
+        if (!wined3d->adapter_count)
+        {
+            if (!(wined3d->adapters = heap_calloc(1, sizeof(*wined3d->adapters))))
+                goto done;
+        }
+        else
+        {
+            if (!(adapters = heap_realloc(wined3d->adapters,
+                    sizeof(*wined3d->adapters) * (wined3d->adapter_count + 1))))
+                goto done;
+
+            wined3d->adapters = adapters;
+        }
+
+        if (adapter->output_count && !lstrcmpW(adapter->outputs[0].device_name, primary_display))
+            primary_idx = wined3d->adapter_count;
+
+        wined3d->adapters[wined3d->adapter_count++] = adapter;
+    }
+
+    if (!wined3d->adapter_count)
+        goto done;
+
+    if (primary_idx)
+    {
+        adapter = wined3d->adapters[0];
+        wined3d->adapters[0] = wined3d->adapters[primary_idx];
+        wined3d->adapters[0]->ordinal = 0;
+        wined3d->adapters[primary_idx] = adapter;
+        wined3d->adapters[primary_idx]->ordinal = primary_idx;
+    }
+
+    /* Some outputs may not be added due to adapters having random LUID, add those outputs to the
+     * primary adapter */
+    display_device.cb = sizeof(display_device);
+    while (EnumDisplayDevicesW(NULL, device_idx++, &display_device, 0))
+    {
+        /* Detached outputs are not enumerated */
+        if (!(display_device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
+            continue;
+
+        found = FALSE;
+        for (adapter_idx = 0; adapter_idx < wined3d->adapter_count && !found; ++adapter_idx)
+        {
+            adapter = wined3d->adapters[adapter_idx];
+            for (output_idx = 0; output_idx < adapter->output_count; ++output_idx)
+            {
+                if (!lstrcmpW(display_device.DeviceName, adapter->outputs[output_idx].device_name))
+                {
+                    found = TRUE;
+                    break;
+                }
+            }
+        }
+
+        if (found)
+            continue;
+
+        TRACE("Adding remaining output %s to adapter %p.\n",
+                wine_dbgstr_w(display_device.DeviceName), wined3d->adapters[0]);
+        if (!wined3d_adapter_create_output(wined3d->adapters[0], display_device.DeviceName))
+            goto done;
+    }
+
+    hr = WINED3D_OK;
+    TRACE("Initialised %u adapters.\n", wined3d->adapter_count);
+done:
+    if (FAILED(hr))
+    {
+        for (adapter_idx = 0; adapter_idx < wined3d->adapter_count; ++adapter_idx)
+            wined3d_adapter_cleanup(wined3d->adapters[adapter_idx]);
+        heap_free(wined3d->adapters);
+    }
+    return hr;
 }

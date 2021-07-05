@@ -5845,7 +5845,7 @@ void get_fog_start_end(const struct wined3d_context *context, const struct wined
     }
 }
 
-static BOOL wined3d_get_primary_display(WCHAR *display)
+BOOL wined3d_get_primary_display(WCHAR *display)
 {
     DISPLAY_DEVICEW display_device;
     DWORD device_idx = 0;

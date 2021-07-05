@@ -5155,6 +5155,9 @@ static BOOL wined3d_adapter_gl_init(struct wined3d_adapter_gl *adapter_gl,
     TRACE("adapter_gl %p, ordinal %u, wined3d_creation_flags %#x.\n",
             adapter_gl, ordinal, wined3d_creation_flags);
 
+    if (ordinal > 0)
+        return FALSE;
+
     if (ordinal == 0 && wined3d_get_primary_adapter_luid(&primary_luid))
         luid = &primary_luid;
 
