@@ -970,6 +970,7 @@ static void  NC_DrawCaption( HDC  hdc, RECT *rect, HWND hwnd, DWORD  style,
  */
 static void  NC_DoNCPaint( HWND  hwnd, HRGN  clip )
 {
+    INT scroll_width, scroll_height;
     HDC hdc;
     RECT rfuzz, rect, rectClip;
     BOOL active;
@@ -1066,12 +1067,24 @@ static void  NC_DoNCPaint( HWND  hwnd, HRGN  clip )
     if ((dwStyle & WS_VSCROLL) && (dwStyle & WS_HSCROLL))
     {
         RECT r = rect;
+
+        scroll_width = GetSystemMetrics(SM_CXVSCROLL);
+        scroll_height = GetSystemMetrics(SM_CYHSCROLL);
+
         if((dwExStyle & WS_EX_LEFTSCROLLBAR) != 0)
-            r.right = r.left + GetSystemMetrics(SM_CXVSCROLL) + 1;
+            r.right = r.left + scroll_width + 1;
         else
-            r.left = r.right - GetSystemMetrics(SM_CXVSCROLL) + 1;
-        r.top  = r.bottom - GetSystemMetrics(SM_CYHSCROLL) + 1;
+            r.left = r.right - scroll_width + 1;
+        r.top  = r.bottom - scroll_height + 1;
         FillRect( hdc, &r,  GetSysColorBrush(COLOR_SCROLLBAR) );
+
+        /* Draw the size grip */
+        if (dwStyle & WS_SIZEBOX)
+        {
+            r.left = max( r.left, r.right - scroll_width - 1 );
+            r.top  = max( r.top, r.bottom - scroll_height - 1 );
+            DrawFrameControl( hdc, &r, DFC_SCROLL, DFCS_SCROLLSIZEGRIP );
+        }
     }
 
     ReleaseDC( hwnd, hdc );
