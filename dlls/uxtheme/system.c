@@ -168,7 +168,7 @@ static void set_theme_active_atom(BOOL active)
  */
 void UXTHEME_LoadTheme(void)
 {
-    BOOL bThemeActive = FALSE;
+    BOOL bThemeActive = FALSE, bLoadedBefore = FALSE;
     HKEY hKey;
     DWORD buffsize;
     HRESULT hr;
@@ -186,6 +186,17 @@ void UXTHEME_LoadTheme(void)
             bThemeActive = FALSE;
             TRACE("Failed to get ThemeActive: %d\n", GetLastError());
         }
+
+        if (!RegQueryValueExW(hKey, L"LoadedBefore", NULL, NULL, (BYTE *)tmp, &buffsize))
+        {
+            bLoadedBefore = (tmp[0] != '0');
+        }
+        else
+        {
+            bLoadedBefore = FALSE;
+            TRACE("Failed to get LoadedBefore: %d\n", GetLastError());
+        }
+
         buffsize = ARRAY_SIZE(szCurrentColor);
         if (RegQueryValueExW(hKey, L"ColorName", NULL, NULL, (BYTE*)szCurrentColor, &buffsize))
             szCurrentColor[0] = '\0';
@@ -216,7 +227,10 @@ void UXTHEME_LoadTheme(void)
             lstrcpynW(szCurrentColor, pt->pszSelectedColor, ARRAY_SIZE(szCurrentColor));
             lstrcpynW(szCurrentSize, pt->pszSelectedSize, ARRAY_SIZE(szCurrentSize));
 
-            MSSTYLES_SetActiveTheme(pt, FALSE);
+            if (bLoadedBefore)
+                MSSTYLES_SetActiveTheme(pt, FALSE);
+            else
+                UXTHEME_SetActiveTheme(pt);
             TRACE("Theme active: %s %s %s\n", debugstr_w(szCurrentTheme),
                 debugstr_w(szCurrentColor), debugstr_w(szCurrentSize));
             MSSTYLES_CloseThemeFile(pt);
@@ -492,7 +506,7 @@ static void UXTHEME_SaveSystemMetrics(void)
  *
  * Change the current active theme
  */
-static HRESULT UXTHEME_SetActiveTheme(PTHEME_FILE tf)
+HRESULT UXTHEME_SetActiveTheme(PTHEME_FILE tf)
 {
     HKEY hKey;
     WCHAR tmp[2];
@@ -528,12 +542,13 @@ static HRESULT UXTHEME_SetActiveTheme(PTHEME_FILE tf)
 		(lstrlenW(szCurrentSize)+1)*sizeof(WCHAR));
             RegSetValueExW(hKey, L"DllName", 0, REG_SZ, (const BYTE*)szCurrentTheme,
 		(lstrlenW(szCurrentTheme)+1)*sizeof(WCHAR));
+            RegSetValueExW(hKey, L"LoadedBefore", 0, REG_SZ, (const BYTE *)tmp, sizeof(WCHAR) * 2);
         }
         else {
             RegDeleteValueW(hKey, L"ColorName");
             RegDeleteValueW(hKey, L"SizeName");
             RegDeleteValueW(hKey, L"DllName");
-
+            RegDeleteValueW(hKey, L"LoadedBefore");
         }
         RegCloseKey(hKey);
     }

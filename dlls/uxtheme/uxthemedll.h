@@ -21,7 +21,10 @@
 #ifndef __WINE_UXTHEMEDLL_H
 #define __WINE_UXTHEMEDLL_H
 
+#include <wingdi.h>
 #include <winuser.h>
+#include <uxtheme.h>
+#include <msstyles.h>
 
 typedef HANDLE HTHEMEFILE;
 
@@ -102,6 +105,7 @@ extern void UXTHEME_InitSystem(HINSTANCE hInst) DECLSPEC_HIDDEN;
 extern ULONG32 UXTHEME_GetActiveThemeHash(void) DECLSPEC_HIDDEN;
 extern ULONG32 UXTHEME_GetCurrentThemeHash(void) DECLSPEC_HIDDEN;
 extern void UXTHEME_LoadTheme(void) DECLSPEC_HIDDEN;
+extern HRESULT UXTHEME_SetActiveTheme(PTHEME_FILE tf) DECLSPEC_HIDDEN;
 extern void UXTHEME_UninitSystem(void) DECLSPEC_HIDDEN;
 
 extern struct user_api_hook user_api DECLSPEC_HIDDEN;
