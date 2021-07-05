@@ -26,6 +26,7 @@
 #include "windef.h"
 #include "winbase.h"
 #include "wingdi.h"
+#include "winuser.h"
 #include "winreg.h"
 #include "winnls.h"
 #include "winerror.h"
@@ -87,12 +88,13 @@ static const LOGPEN NullPen  = { PS_NULL,  { 0, 0 }, 0 };
 static const LOGBRUSH DCBrush = { BS_SOLID, RGB(255,255,255), 0 };
 static const LOGPEN DCPen     = { PS_SOLID, { 0, 0 }, RGB(0,0,0) };
 
-/* reserve one extra entry for the stock default bitmap */
+/* reserve extra entries for the stock default bitmap and a bitmap for display DCs */
 /* this is what Windows does too */
-#define NB_STOCK_OBJECTS (STOCK_LAST+2)
+#define NB_STOCK_OBJECTS (STOCK_LAST+3)
 
 static HGDIOBJ stock_objects[NB_STOCK_OBJECTS];
 static HGDIOBJ scaled_stock_objects[NB_STOCK_OBJECTS];
+static SIZE display_bitmap_size = { 1, 1 };
 
 static CRITICAL_SECTION gdi_section;
 static CRITICAL_SECTION_DEBUG critsect_debug =
@@ -644,6 +646,7 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 
     stock_objects[DEFAULT_PALETTE] = PALETTE_Init();
     stock_objects[DEFAULT_BITMAP]  = CreateBitmap( 1, 1, 1, 1, NULL );
+    stock_objects[DISPLAY_BITMAP]  = CreateBitmap( 1, 1, 1, 1, NULL );
 
     /* language-independent stock fonts */
     stock_objects[OEM_FIXED_FONT]      = CreateFontIndirectW( &OEMFixedFont );
@@ -1037,6 +1040,9 @@ void GDI_hdc_not_using_object(HGDIOBJ obj, HDC hdc)
  */
 HGDIOBJ WINAPI GetStockObject( INT obj )
 {
+    HBITMAP bitmap;
+    SIZE size;
+
     if ((obj < 0) || (obj >= NB_STOCK_OBJECTS)) return 0;
     switch (obj)
     {
@@ -1046,6 +1052,32 @@ HGDIOBJ WINAPI GetStockObject( INT obj )
     case DEFAULT_GUI_FONT:
         if (get_system_dpi() != 96) return scaled_stock_objects[obj];
         break;
+    case DISPLAY_BITMAP:
+    {
+        EnterCriticalSection( &gdi_section );
+
+        if (pGetSystemMetrics)
+        {
+            size.cx = pGetSystemMetrics( SM_CXVIRTUALSCREEN );
+            size.cy = pGetSystemMetrics( SM_CYVIRTUALSCREEN );
+            if (size.cx != display_bitmap_size.cx || size.cy != display_bitmap_size.cy)
+            {
+                if ((bitmap = CreateBitmap( size.cx, size.cy, 1, 32, NULL )))
+                {
+                    __wine_make_gdi_object_system( stock_objects[DISPLAY_BITMAP], FALSE );
+                    if (!GDI_get_ref_count( stock_objects[DISPLAY_BITMAP] ))
+                        DeleteObject( stock_objects[DISPLAY_BITMAP] );
+                    stock_objects[DISPLAY_BITMAP] = bitmap;
+                    display_bitmap_size = size;
+                    __wine_make_gdi_object_system( stock_objects[DISPLAY_BITMAP], TRUE );
+                }
+            }
+        }
+
+        bitmap = stock_objects[DISPLAY_BITMAP];
+        LeaveCriticalSection( &gdi_section );
+        return bitmap;
+    }
     }
     return stock_objects[obj];
 }
@@ -1105,6 +1137,7 @@ HGDIOBJ WINAPI GetCurrentObject(HDC hdc,UINT type)
 {
     HGDIOBJ ret = 0;
     DC * dc = get_dc_ptr( hdc );
+    HBITMAP display_bitmap;
 
     if (!dc) return 0;
 
@@ -1114,7 +1147,29 @@ HGDIOBJ WINAPI GetCurrentObject(HDC hdc,UINT type)
 	case OBJ_BRUSH:	 ret = dc->hBrush; break;
 	case OBJ_PAL:	 ret = dc->hPalette; break;
 	case OBJ_FONT:	 ret = dc->hFont; break;
-	case OBJ_BITMAP: ret = dc->hBitmap; break;
+	case OBJ_BITMAP:
+        {
+            if (dc->display_dc)
+            {
+                EnterCriticalSection( &gdi_section );
+
+                display_bitmap = GetStockObject( DISPLAY_BITMAP );
+                if (dc->hBitmap != display_bitmap)
+                {
+                    GDI_dec_ref_count( dc->hBitmap );
+                    dc->hBitmap = GDI_inc_ref_count( display_bitmap );
+                }
+
+                ret = dc->hBitmap;
+                LeaveCriticalSection( &gdi_section );
+            }
+            else
+            {
+                ret = dc->hBitmap;
+            }
+
+            break;
+        }
 
 	/* tests show that OBJ_REGION is explicitly ignored */
 	case OBJ_REGION: break;

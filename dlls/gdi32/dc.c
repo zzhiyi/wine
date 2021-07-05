@@ -661,7 +661,16 @@ HDC WINAPI CreateDCW( LPCWSTR driver, LPCWSTR device, LPCWSTR output,
     if (!(dc = alloc_dc_ptr( NTGDI_OBJ_DC ))) return 0;
     hdc = dc->hSelf;
 
-    dc->hBitmap = GDI_inc_ref_count( GetStockObject( DEFAULT_BITMAP ));
+    if (!lstrcmpiW( driver, L"DISPLAY" ) || is_display_device( driver ) || is_display_device( device ))
+    {
+        dc->display_dc = 1;
+        dc->hBitmap = GDI_inc_ref_count( GetStockObject( DISPLAY_BITMAP ));
+    }
+    else
+    {
+        dc->display_dc = 0;
+        dc->hBitmap = GDI_inc_ref_count( GetStockObject( DEFAULT_BITMAP ));
+    }
 
     TRACE("(driver=%s, device=%s, output=%s): returning %p\n",
           debugstr_w(driver), debugstr_w(device), debugstr_w(output), dc->hSelf );

@@ -47,6 +47,8 @@ typedef struct {
 
 /* extra stock object: default 1x1 bitmap for memory DCs */
 #define DEFAULT_BITMAP (STOCK_LAST+1)
+/* extra stock object: the bitmap for display DCs */
+#define DISPLAY_BITMAP (STOCK_LAST+2)
 
 struct gdi_obj_funcs
 {
@@ -87,6 +89,7 @@ typedef struct tagDC
     DCHOOKPROC   hookProc;         /* DC hook */
     BOOL         bounds_enabled:1; /* bounds tracking is enabled */
     BOOL         path_open:1;      /* path is currently open (only for saved DCs) */
+    BOOL         display_dc:1;     /* Whether this DC is a display DC */
 
     POINT        wnd_org;          /* Window origin */
     SIZE         wnd_ext;          /* Window extent */
@@ -775,5 +778,7 @@ static inline void copy_bitmapinfo( BITMAPINFO *dst, const BITMAPINFO *src )
 extern void CDECL free_heap_bits( struct gdi_image_bits *bits ) DECLSPEC_HIDDEN;
 
 extern HMODULE gdi32_module DECLSPEC_HIDDEN;
+
+extern INT (WINAPI *pGetSystemMetrics)( INT ) DECLSPEC_HIDDEN;
 
 #endif /* __WINE_NTGDI_PRIVATE_H */

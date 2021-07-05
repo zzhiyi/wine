@@ -85,7 +85,7 @@ static BOOL (WINAPI *pEnumDisplayMonitors)(HDC, LPRECT, MONITORENUMPROC, LPARAM)
 static BOOL (WINAPI *pEnumDisplaySettingsW)(LPCWSTR, DWORD, LPDEVMODEW);
 static HWND (WINAPI *pGetDesktopWindow)(void);
 static BOOL (WINAPI *pGetMonitorInfoW)(HMONITOR, LPMONITORINFO);
-static INT (WINAPI *pGetSystemMetrics)(INT);
+INT (WINAPI *pGetSystemMetrics)(INT) = NULL;
 static DPI_AWARENESS_CONTEXT (WINAPI *pSetThreadDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
 
 /**********************************************************************
