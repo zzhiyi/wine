@@ -449,6 +449,10 @@ static LRESULT DEFWND_DefWinProc( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
             return 1;
         }
 
+    case WM_SYSCOLORCHANGE:
+        SYSCOLOR_Invalidate();
+        return 0;
+
     case WM_GETDLGCODE:
         return 0;
 

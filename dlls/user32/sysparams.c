@@ -2915,6 +2915,27 @@ COLORREF WINAPI DECLSPEC_HOTPATCH GetSysColor( INT nIndex )
     return ret;
 }
 
+void SYSCOLOR_Invalidate(void)
+{
+    HBRUSH brush;
+    HPEN pen;
+    int i;
+
+    for (i = 0; i < ARRAY_SIZE(system_colors); ++i)
+    {
+        system_colors[i].hdr.loaded = FALSE;
+        if ((brush = InterlockedExchangePointer( (void **)&system_colors[i].brush, 0 )))
+        {
+            __wine_make_gdi_object_system( brush, FALSE );
+            DeleteObject( brush );
+        }
+        if ((pen = InterlockedExchangePointer( (void **)&system_colors[i].pen, 0 )))
+        {
+            __wine_make_gdi_object_system( pen, FALSE );
+            DeleteObject( pen );
+        }
+    }
+}
 
 /*************************************************************************
  *		SetSysColors (USER32.@)
