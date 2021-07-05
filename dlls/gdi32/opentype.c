@@ -344,7 +344,7 @@ static UINT get_name_record_codepage( enum OPENTYPE_PLATFORM_ID platform, USHORT
         case TT_NAME_MAC_ENCODING_THAI:
             return 10021;
         default:
-            FIXME( "encoding %u not handled, platform %d.\n", encoding, platform );
+            WARN( "encoding %u not handled, platform %d.\n", encoding, platform );
             break;
         }
         break;
