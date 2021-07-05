@@ -64,6 +64,7 @@ DEFINE_DEVPROPKEY(WINE_DEVPROPKEY_MONITOR_ADAPTERNAME, 0x233a9ef3, 0xafc4, 0x4ab
 static const char initial_mode_key[] = "Initial Display Mode";
 static const WCHAR pixelencodingW[] = {'P','i','x','e','l','E','n','c','o','d','i','n','g',0};
 static const WCHAR driver_date_dataW[] = {'D','r','i','v','e','r','D','a','t','e','D','a','t','a',0};
+static const WCHAR driver_dateW[] = {'D','r','i','v','e','r','D','a','t','e',0};
 static const WCHAR driver_descW[] = {'D','r','i','v','e','r','D','e','s','c',0};
 static const WCHAR displayW[] = {'D','I','S','P','L','A','Y',0};
 static const WCHAR pciW[] = {'P','C','I',0};
@@ -121,7 +122,7 @@ static const WCHAR monitor_instance_fmtW[] = {
 static const WCHAR monitor_hardware_idW[] = {
     'M','O','N','I','T','O','R','\\',
     'D','e','f','a','u','l','t','_','M','o','n','i','t','o','r',0,0};
-
+static const WCHAR driver_date_fmtW[] = {'%','u','-','%','u','-','%','u',0};
 
 static CFArrayRef modes;
 static BOOL modes_has_8bpp, modes_has_16bpp;
@@ -1455,6 +1456,7 @@ static BOOL macdrv_init_gpu(HDEVINFO devinfo, const struct macdrv_gpu *gpu, int 
     SP_DEVINFO_DATA device_data = {sizeof(device_data)};
     WCHAR instanceW[MAX_PATH];
     DEVPROPTYPE property_type;
+    SYSTEMTIME systemtime;
     WCHAR nameW[MAX_PATH];
     WCHAR bufferW[1024];
     FILETIME filetime;
@@ -1512,6 +1514,12 @@ static BOOL macdrv_init_gpu(HDEVINFO devinfo, const struct macdrv_gpu *gpu, int 
     GetSystemTimeAsFileTime(&filetime);
     if (RegSetValueExW(hkey, driver_date_dataW, 0, REG_BINARY, (BYTE *)&filetime, sizeof(filetime)))
         goto done;
+
+    GetSystemTime(&systemtime);
+    sprintfW(bufferW, driver_date_fmtW, systemtime.wMonth, systemtime.wDay, systemtime.wYear);
+    if (RegSetValueExW(hkey, driver_dateW, 0, REG_SZ, (BYTE *)bufferW, (strlenW(bufferW) + 1) * sizeof(WCHAR)))
+        goto done;
+
     RegCloseKey(hkey);
 
     /* Retrieve driver value for adapters */
