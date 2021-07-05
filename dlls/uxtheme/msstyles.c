@@ -31,6 +31,7 @@
 #include "tmschema.h"
 
 #include "msstyles.h"
+#include "uxthemedll.h"
 
 #include "wine/debug.h"
 #include "wine/heap.h"
@@ -216,6 +217,26 @@ void MSSTYLES_CloseThemeFile(PTHEME_FILE tf)
             heap_free(tf);
         }
     }
+}
+
+/***********************************************************************
+ *      MSSTYLES_GetActiveTheme
+ *
+ * Get the active theme. If the active theme is not the same as the current theme or theming
+ * status is changed, reload theme.
+ */
+static THEME_FILE *MSSTYLES_GetActiveTheme(void)
+{
+    if (!IsThemeActive())
+        return NULL;
+
+    if (UXTHEME_GetActiveThemeHash() != UXTHEME_GetCurrentThemeHash())
+    {
+        MSSTYLES_SetActiveTheme(NULL, FALSE);
+        UXTHEME_LoadTheme();
+    }
+
+    return tfActiveTheme;
 }
 
 /***********************************************************************
@@ -579,8 +600,11 @@ static inline PTHEME_PROPERTY MSSTYLES_FFindMetric(PTHEME_FILE tf, int iProperty
  */
 PTHEME_PROPERTY MSSTYLES_FindMetric(int iPropertyPrimitive, int iPropertyId)
 {
-    if(!tfActiveTheme) return NULL;
-    return MSSTYLES_FFindMetric(tfActiveTheme, iPropertyPrimitive, iPropertyId);
+    THEME_FILE *theme;
+
+    theme = MSSTYLES_GetActiveTheme();
+    if(!theme) return NULL;
+    return MSSTYLES_FFindMetric(theme, iPropertyPrimitive, iPropertyId);
 }
 
 /***********************************************************************
@@ -976,15 +1000,17 @@ PTHEME_CLASS MSSTYLES_OpenThemeClass(LPCWSTR pszAppName, LPCWSTR pszClassList)
 {
     PTHEME_CLASS cls = NULL;
     WCHAR szClassName[MAX_THEME_CLASS_NAME];
+    THEME_FILE *theme;
     LPCWSTR start;
     LPCWSTR end;
     DWORD len;
 
-    if(!tfActiveTheme) {
+    theme = MSSTYLES_GetActiveTheme();
+    if(!theme) {
         TRACE("there is no active theme\n");
         return NULL;
     }
-    if(!tfActiveTheme->classes) {
+    if(!theme->classes) {
 	return NULL;
     }
 
@@ -993,16 +1019,16 @@ PTHEME_CLASS MSSTYLES_OpenThemeClass(LPCWSTR pszAppName, LPCWSTR pszClassList)
         len = end-start;
         lstrcpynW(szClassName, start, min(len+1, ARRAY_SIZE(szClassName)));
         start = end+1;
-        cls = MSSTYLES_FindClass(tfActiveTheme, pszAppName, szClassName);
+        cls = MSSTYLES_FindClass(theme, pszAppName, szClassName);
         if(cls) break;
     }
     if(!cls && *start) {
         lstrcpynW(szClassName, start, ARRAY_SIZE(szClassName));
-        cls = MSSTYLES_FindClass(tfActiveTheme, pszAppName, szClassName);
+        cls = MSSTYLES_FindClass(theme, pszAppName, szClassName);
     }
     if(cls) {
         TRACE("Opened app %s, class %s from list %s\n", debugstr_w(cls->szAppName), debugstr_w(cls->szClassName), debugstr_w(pszClassList));
-	cls->tf = tfActiveTheme;
+	cls->tf = theme;
 	cls->tf->dwRefCount++;
     }
     return cls;

@@ -99,6 +99,9 @@ BOOL WINAPI ThemeHooksInstall(void) DECLSPEC_HIDDEN;
 BOOL WINAPI ThemeHooksRemove(void) DECLSPEC_HIDDEN;
 
 extern void UXTHEME_InitSystem(HINSTANCE hInst) DECLSPEC_HIDDEN;
+extern ULONG32 UXTHEME_GetActiveThemeHash(void) DECLSPEC_HIDDEN;
+extern ULONG32 UXTHEME_GetCurrentThemeHash(void) DECLSPEC_HIDDEN;
+extern void UXTHEME_LoadTheme(void) DECLSPEC_HIDDEN;
 extern void UXTHEME_UninitSystem(void) DECLSPEC_HIDDEN;
 
 extern struct user_api_hook user_api DECLSPEC_HIDDEN;

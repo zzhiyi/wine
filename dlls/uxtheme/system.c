@@ -49,7 +49,7 @@ static DWORD dwThemeAppProperties = STAP_ALLOW_NONCLIENT | STAP_ALLOW_CONTROLS;
 static ATOM atWindowTheme;
 static ATOM atSubAppName;
 static ATOM atSubIdList;
-static ATOM atIsThemeActive;
+static ATOM atActiveThemeHash;
 
 static WCHAR szCurrentTheme[MAX_PATH];
 static WCHAR szCurrentColor[64];
@@ -131,12 +131,34 @@ static DWORD query_reg_path (HKEY hKey, LPCWSTR lpszValue,
   return dwRet;
 }
 
+static unsigned long djb2_hash(unsigned long seed, WCHAR *str)
+{
+    unsigned long hash = seed;
+    int c;
+
+    while ((c = *str++))
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+    return hash;
+}
+
+ULONG32 UXTHEME_GetCurrentThemeHash(void)
+{
+    return djb2_hash(djb2_hash(djb2_hash(5381, szCurrentTheme), szCurrentColor), szCurrentSize);
+}
+
+ULONG32 UXTHEME_GetActiveThemeHash(void)
+{
+    return (ULONG32)GetPropW(GetDesktopWindow(), (LPCWSTR)MAKEINTATOM(atActiveThemeHash));
+}
+
 static void set_theme_active_atom(BOOL active)
 {
     if (active)
-        SetPropW(GetDesktopWindow(), (LPCWSTR)MAKEINTATOM(atIsThemeActive), UlongToHandle(1));
+        SetPropW(GetDesktopWindow(), (LPCWSTR)MAKEINTATOM(atActiveThemeHash),
+                 UlongToHandle(UXTHEME_GetCurrentThemeHash()));
     else
-        RemovePropW(GetDesktopWindow(), (LPCWSTR)MAKEINTATOM(atIsThemeActive));
+        RemovePropW(GetDesktopWindow(), (LPCWSTR)MAKEINTATOM(atActiveThemeHash));
 }
 
 /***********************************************************************
@@ -144,7 +166,7 @@ static void set_theme_active_atom(BOOL active)
  *
  * Set the current active theme from the registry
  */
-static void UXTHEME_LoadTheme(void)
+void UXTHEME_LoadTheme(void)
 {
     BOOL bThemeActive = FALSE;
     HKEY hKey;
@@ -532,7 +554,7 @@ void UXTHEME_InitSystem(HINSTANCE hInst)
     atSubAppName         = GlobalAddAtomW(L"ux_subapp");
     atSubIdList          = GlobalAddAtomW(L"ux_subidlst");
     atDialogThemeEnabled = GlobalAddAtomW(L"ux_dialogtheme");
-    atIsThemeActive      = GlobalAddAtomW(L"ux_isthemeactive");
+    atActiveThemeHash    = GlobalAddAtomW(L"ux_activethemehash");
 
     UXTHEME_LoadTheme();
     ThemeHooksInstall();
@@ -547,7 +569,7 @@ void UXTHEME_UninitSystem(void)
     GlobalDeleteAtom(atSubAppName);
     GlobalDeleteAtom(atSubIdList);
     GlobalDeleteAtom(atDialogThemeEnabled);
-    GlobalDeleteAtom(atIsThemeActive);
+    GlobalDeleteAtom(atActiveThemeHash);
 }
 
 /***********************************************************************
@@ -565,7 +587,7 @@ BOOL WINAPI IsThemeActive(void)
 {
     TRACE("\n");
     SetLastError(ERROR_SUCCESS);
-    return !!GetPropW(GetDesktopWindow(), (LPCWSTR)MAKEINTATOM(atIsThemeActive));
+    return !!UXTHEME_GetActiveThemeHash();
 }
 
 /************************************************************
