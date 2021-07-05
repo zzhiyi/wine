@@ -968,7 +968,7 @@ void update_user_time( Time time )
 /***********************************************************************
  *     update_net_wm_states
  */
-void update_net_wm_states( struct x11drv_win_data *data )
+void update_net_wm_states( struct x11drv_win_data *data, BOOL allow_fullscreen )
 {
     DWORD i, style, ex_style, new_state = 0;
 
@@ -978,7 +978,7 @@ void update_net_wm_states( struct x11drv_win_data *data )
     style = GetWindowLongW( data->hwnd, GWL_STYLE );
     if (style & WS_MINIMIZE)
         new_state |= data->net_wm_state & ((1 << NET_WM_STATE_FULLSCREEN)|(1 << NET_WM_STATE_MAXIMIZED));
-    if (is_window_rect_full_screen( &data->whole_rect ))
+    if (allow_fullscreen && is_window_rect_full_screen( &data->whole_rect ))
     {
         if ((style & WS_MAXIMIZE) && (style & WS_CAPTION) == WS_CAPTION)
             new_state |= (1 << NET_WM_STATE_MAXIMIZED);
@@ -1123,7 +1123,7 @@ static void map_window( HWND hwnd, DWORD new_style )
 
         if (!data->embedded)
         {
-            update_net_wm_states( data );
+            update_net_wm_states( data, TRUE );
             sync_window_style( data );
             XMapWindow( data->display, data->whole_window );
             XFlush( data->display );
@@ -1311,7 +1311,11 @@ static void sync_window_position( struct x11drv_win_data *data,
 
     set_size_hints( data, style );
     set_mwm_hints( data, style, ex_style );
-    update_net_wm_states( data );
+    /* KWin doesn't allow moving a window with _NET_WM_STATE_FULLSCREEN set. So we need to remove
+     * _NET_WM_STATE_FULLSCREEN before moving the window and restore it later */
+    /* Disabled for not being 100% correct on GNOME */
+    /* update_net_wm_states( data, FALSE ); */
+    update_net_wm_states( data, TRUE );
     data->configure_serial = NextRequest( data->display );
     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
 #ifdef HAVE_LIBXSHAPE
@@ -2523,12 +2527,12 @@ void CDECL X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flags
                 XIconifyWindow( data->display, data->whole_window, data->vis.screen );
             else if (is_window_rect_mapped( rectWindow ))
                 XMapWindow( data->display, data->whole_window );
-            update_net_wm_states( data );
+            update_net_wm_states( data, TRUE );
         }
         else
         {
             if (swp_flags & (SWP_FRAMECHANGED|SWP_STATECHANGED)) set_wm_hints( data );
-            if (!event_type) update_net_wm_states( data );
+            if (!event_type) update_net_wm_states( data, TRUE );
         }
     }
 

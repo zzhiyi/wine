@@ -306,7 +306,7 @@ static BOOL CALLBACK update_windows_on_display_change(HWND hwnd, LPARAM lparam)
         return TRUE;
 
     /* update the full screen state */
-    update_net_wm_states(data);
+    update_net_wm_states(data, TRUE);
 
     if (mask && data->whole_window)
     {
