@@ -3719,6 +3719,64 @@ struct set_user_object_info_reply
 #define SET_USER_OBJECT_GET_FULL_NAME   2
 
 
+struct update_monitor_entry
+{
+    rectangle_t    monitor_rect;
+    rectangle_t    work_rect;
+    WCHAR          adapter_name[32];
+    data_size_t    adapter_name_len;
+};
+
+struct enum_monitor_entry
+{
+    user_handle_t  handle;
+    rectangle_t    monitor_rect;
+};
+
+
+
+struct update_monitors_request
+{
+    struct request_header __header;
+    /* VARARG(monitors,update_monitor_entry); */
+    char __pad_12[4];
+};
+struct update_monitors_reply
+{
+    struct reply_header __header;
+};
+
+
+
+struct get_monitor_info_request
+{
+    struct request_header __header;
+    user_handle_t  handle;
+};
+struct get_monitor_info_reply
+{
+    struct reply_header __header;
+    rectangle_t    monitor_rect;
+    rectangle_t    work_rect;
+    /* VARARG(adapter,unicode_str); */
+};
+
+
+
+struct enum_monitors_request
+{
+    struct request_header __header;
+    char __pad_12[4];
+};
+struct enum_monitors_reply
+{
+    struct reply_header __header;
+    unsigned int   count;
+    /* VARARG(monitors,enum_monitor_entry); */
+    char __pad_12[4];
+};
+
+
 
 struct register_hotkey_request
 {
@@ -5584,6 +5642,9 @@ enum request
     REQ_set_thread_desktop,
     REQ_enum_desktop,
     REQ_set_user_object_info,
+    REQ_update_monitors,
+    REQ_get_monitor_info,
+    REQ_enum_monitors,
     REQ_register_hotkey,
     REQ_unregister_hotkey,
     REQ_attach_thread_input,
@@ -5865,6 +5926,9 @@ union generic_request
     struct set_thread_desktop_request set_thread_desktop_request;
     struct enum_desktop_request enum_desktop_request;
     struct set_user_object_info_request set_user_object_info_request;
+    struct update_monitors_request update_monitors_request;
+    struct get_monitor_info_request get_monitor_info_request;
+    struct enum_monitors_request enum_monitors_request;
     struct register_hotkey_request register_hotkey_request;
     struct unregister_hotkey_request unregister_hotkey_request;
     struct attach_thread_input_request attach_thread_input_request;
@@ -6144,6 +6208,9 @@ union generic_reply
     struct set_thread_desktop_reply set_thread_desktop_reply;
     struct enum_desktop_reply enum_desktop_reply;
     struct set_user_object_info_reply set_user_object_info_reply;
+    struct update_monitors_reply update_monitors_reply;
+    struct get_monitor_info_reply get_monitor_info_reply;
+    struct enum_monitors_reply enum_monitors_reply;
     struct register_hotkey_reply register_hotkey_reply;
     struct unregister_hotkey_reply unregister_hotkey_reply;
     struct attach_thread_input_reply attach_thread_input_reply;
