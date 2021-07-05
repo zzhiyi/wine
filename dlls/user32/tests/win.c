@@ -2655,7 +2655,7 @@ static void test_SetWindowPos(HWND hwnd, HWND hwnd2)
     RECT orig_win_rc, rect;
     LONG_PTR old_proc;
     HWND hwnd_grandchild, hwnd_child, hwnd_child2;
-    HWND hwnd_desktop;
+    HWND hwnd_desktop, hwnd_popup;
     RECT rc_expected;
     RECT rc1, rc2;
     BOOL ret;
@@ -2865,6 +2865,40 @@ static void test_SetWindowPos(HWND hwnd, HWND hwnd2)
     flush_events( TRUE );
     todo_wine check_active_state(hwnd2, hwnd2, hwnd2);
     DestroyWindow(hwnd_child);
+
+    if (GetSystemMetrics(SM_CMONITORS) >= 2)
+    {
+        SetRect(&rect, 100, 100, 200, 200);
+        hwnd_popup = CreateWindowA("static", "test", WS_POPUP | WS_VISIBLE, rect.left, rect.top,
+                rect.right - rect.left, rect.bottom - rect.top, NULL, NULL, NULL, NULL);
+        ok(!!hwnd, "CreateWindowA failed, error %#x.\n", GetLastError());
+        flush_events(TRUE);
+        rc_expected = rect;
+        ret = GetWindowRect(hwnd_popup, &rect);
+        ok(ret, "GetWindowRect failed, error %#x.\n", GetLastError());
+        ok(EqualRect(&rect, &rc_expected), "Expected %s, got %s.\n", wine_dbgstr_rect(&rc_expected),
+                wine_dbgstr_rect(&rect));
+
+        SetRect(&rect, 1, 1, GetSystemMetrics(SM_CXSCREEN) - 1, GetSystemMetrics(SM_CYSCREEN) - 1);
+        ret = SetWindowPos(hwnd_popup, 0, rect.left, rect.top, rect.right - rect.left,
+                rect.bottom - rect.top, SWP_NOZORDER);
+        ok(ret, "SetWindowPos failed, error %#x.\n", GetLastError());
+        flush_events(TRUE);
+        rc_expected = rect;
+        ret = GetWindowRect(hwnd_popup, &rect);
+        ok(ret, "GetWindowRect failed, error %#x.\n", GetLastError());
+        /* This bug appears when there are multiple monitors present and the window has WS_POPUP
+         * style and running on GNOME */
+        todo_wine_if(!EqualRect(&rect, &rc_expected))
+        ok(EqualRect(&rect, &rc_expected), "Expected %s, got %s.\n", wine_dbgstr_rect(&rc_expected),
+                wine_dbgstr_rect(&rect));
+
+        DestroyWindow(hwnd_popup);
+    }
+    else
+    {
+        skip("This test requires at least two monitors.\n");
+    }
 }
 
 static void test_SetMenu(HWND parent)
