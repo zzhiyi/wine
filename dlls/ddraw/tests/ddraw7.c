@@ -18688,6 +18688,442 @@ static void run_for_each_device_type(void (*test_func)(const GUID *))
     test_func(&IID_IDirect3DRGBDevice);
 }
 
+struct monitor_info
+{
+    WCHAR secondary_adapter[CCHDEVICENAME];
+    RECT secondary_rect;
+    RECT primary_rect;
+};
+
+static BOOL CALLBACK enum_monitor_proc(HMONITOR monitor, HDC dc, RECT *rect, LPARAM lparam)
+{
+    struct monitor_info *monitor_info = (struct monitor_info *)lparam;
+    MONITORINFOEXW mi;
+
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(monitor, (MONITORINFO *)&mi))
+    {
+        if (mi.dwFlags & MONITORINFOF_PRIMARY)
+        {
+            monitor_info->primary_rect = mi.rcMonitor;
+        }
+        else if (!IsRectEmpty(&mi.rcMonitor))
+        {
+            monitor_info->secondary_rect = mi.rcMonitor;
+            lstrcpyW(monitor_info->secondary_adapter, mi.szDevice);
+        }
+
+        if (!IsRectEmpty(&monitor_info->primary_rect) && !IsRectEmpty(&monitor_info->secondary_rect))
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+static void test_multi_monitor_blt(void)
+{
+    HWND fullscreen_window, window, clipper_window;
+    IDirectDrawSurface7 *offscreen_surface;
+    IDirectDrawSurface7 *primary_surface;
+    RECT rect, window_rect, virtual_rect;
+    INT primary_width, primary_height;
+    struct monitor_info monitor_info;
+    INT window_width, window_height;
+    BOOL restore_secondary = FALSE;
+    IDirectDrawClipper *clipper;
+    DDSURFACEDESC2 ddsd;
+    DEVMODEW dm, old_dm;
+    IDirectDraw7 *ddraw;
+    COLORREF color_ref;
+    D3DCOLOR color = 0;
+    INT x = 0, y = 0;
+    BOOL do_break;
+    WNDCLASSA cls;
+    DDBLTFX fx;
+    HRESULT hr;
+    HDC hdc;
+
+    memset(&monitor_info, 0, sizeof(monitor_info));
+    EnumDisplayMonitors(NULL, NULL, enum_monitor_proc, (LPARAM)&monitor_info);
+
+    if (IsRectEmpty(&monitor_info.secondary_rect))
+    {
+        skip("No secondary monitor is found\n");
+        return;
+    }
+
+    /* Move the secondary monitor to the right of the primary monitor to make tests simpler */
+    if (monitor_info.secondary_rect.left != monitor_info.primary_rect.right ||
+        monitor_info.secondary_rect.top != monitor_info.primary_rect.top)
+    {
+        trace("Adjusting the secondary monitor to the right of the primary monitor for tests\n");
+
+        memset(&old_dm, 0, sizeof(old_dm));
+        old_dm.dmSize = sizeof(old_dm);
+        EnumDisplaySettingsW(monitor_info.secondary_adapter, ENUM_CURRENT_SETTINGS, &old_dm);
+
+        dm = old_dm;
+        dm.dmPosition.x = monitor_info.primary_rect.right;
+        dm.dmPosition.y = monitor_info.primary_rect.top;
+        ChangeDisplaySettingsExW(monitor_info.secondary_adapter, &dm, 0, CDS_RESET, NULL);
+
+        memset(&monitor_info, 0, sizeof(monitor_info));
+        EnumDisplayMonitors(NULL, NULL, enum_monitor_proc, (LPARAM)&monitor_info);
+        if (monitor_info.secondary_rect.left != monitor_info.primary_rect.right ||
+            monitor_info.secondary_rect.top != monitor_info.primary_rect.top)
+        {
+            skip("Failed to move the secondary monitor\n");
+            return;
+        }
+
+        restore_secondary = TRUE;
+    }
+
+    primary_width = monitor_info.primary_rect.right - monitor_info.primary_rect.left;
+    primary_height = monitor_info.primary_rect.bottom - monitor_info.primary_rect.top;
+    virtual_rect.left = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    virtual_rect.top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    virtual_rect.right = virtual_rect.left + GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    virtual_rect.bottom = virtual_rect.top + GetSystemMetrics(SM_CYVIRTUALSCREEN);
+
+    /* Create a white fullscreen window on the primary monitor so that even if
+     * Windows redraws on the primary surface there are only white pixels */
+    memset(&cls, 0, sizeof(cls));
+    cls.style = CS_HREDRAW | CS_VREDRAW;
+    cls.lpfnWndProc = DefWindowProcA;
+    cls.hInstance = GetModuleHandleA(0);
+    cls.hbrBackground = GetStockObject(WHITE_BRUSH);
+    cls.lpszClassName = "FullscreenClass";
+    ok(RegisterClassA(&cls), "RegisterClassA failed, error %#x", GetLastError());
+
+    fullscreen_window = CreateWindowA("FullscreenClass", "fullscreen", WS_POPUP | WS_VISIBLE,
+            0, 0, primary_width, primary_height, NULL, NULL, NULL, NULL);
+    ok(fullscreen_window != NULL, "CreateWindowA failed, error %#x\n", GetLastError());
+    SetWindowPos(fullscreen_window, HWND_TOP, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+
+    /* Create a test window */
+    window_width = 100;
+    window_height = 100;
+    window = CreateWindowA("static", "ddraw_test", WS_POPUP | WS_VISIBLE,
+            monitor_info.secondary_rect.left, monitor_info.secondary_rect.top,
+            window_width, window_height, NULL, NULL, NULL, NULL);
+    ok(window != NULL, "CreateWindowA failed, error %#x\n", GetLastError());
+    GetWindowRect(window, &window_rect);
+
+    ddraw = create_ddraw();
+    ok(ddraw != NULL, "Failed to create a ddraw object.\n");
+
+    hr = IDirectDraw7_SetCooperativeLevel(ddraw, window, DDSCL_NORMAL);
+    ok(hr == DD_OK, "SetCooperativeLevel failed, hr %#x\n", hr);
+
+    /* Create a primary surface */
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
+    hr = IDirectDraw7_CreateSurface(ddraw, &ddsd, &primary_surface, NULL);
+    ok(hr == DD_OK, "CreateSurface failed, hr %#x\n", hr);
+
+    /* Create an off-screen surface */
+    memset(&ddsd, 0, sizeof(ddsd));
+    ddsd.dwSize = sizeof(ddsd);
+    ddsd.dwFlags = DDSD_CAPS | DDSD_WIDTH | DDSD_HEIGHT | DDSD_PIXELFORMAT;
+    ddsd.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+    ddsd.dwWidth = primary_width;
+    ddsd.dwHeight = primary_height;
+    U4(ddsd).ddpfPixelFormat.dwSize = sizeof(U4(ddsd).ddpfPixelFormat);
+    U4(ddsd).ddpfPixelFormat.dwFlags = DDPF_RGB;
+    U1(U4(ddsd).ddpfPixelFormat).dwRGBBitCount = 32;
+    U2(U4(ddsd).ddpfPixelFormat).dwRBitMask = 0xff0000;
+    U3(U4(ddsd).ddpfPixelFormat).dwGBitMask = 0x00ff00;
+    U4(U4(ddsd).ddpfPixelFormat).dwBBitMask = 0x0000ff;
+    hr = IDirectDraw7_CreateSurface(ddraw, &ddsd, &offscreen_surface, NULL);
+    ok(hr == DD_OK, "CreateSurface failed, hr %#x\n", hr);
+
+    /* Fill the primary surface with 0x0000ff using the window rectangle as destination rectangle.
+     * Note the window is on the secondary monitor */
+    memset(&fx, 0, sizeof(fx));
+    fx.dwSize = sizeof(fx);
+    fx.dwFillColor = 0x0000ff;
+    /* Blit first to the offscreen surface because the primary surface might have a different pixel format */
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+    /* Blit to the primary surface */
+    hr = IDirectDrawSurface7_Blt(primary_surface, &window_rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+    /* Blit to the offscreen surface from the primary surface because the primary surface can't be locked */
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, primary_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    /* Verify that the primary surface data is not updated */
+    do_break = FALSE;
+    for (x = 0; x < primary_width; ++x)
+    {
+        for (y = 0; y < primary_height; ++y)
+        {
+            color = get_surface_color(offscreen_surface, x, y);
+            /* White pixels, the primary surface got redrew */
+            if (color == 0xffffff)
+                continue;
+
+            if (color == 0x0000ff)
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    ok(!do_break, "Expected color not 0x%06x at %d,%d\n", 0x0000ff, x, y);
+
+    /* Verify that the window got filled with 0x0000ff even if it's on the secondary monitor */
+    hdc = GetDC(window);
+    ok(hdc != NULL, "GetDC failed, error %#x\n", GetLastError());
+
+    do_break = FALSE;
+    for (x = 0; x < window_width; ++x)
+    {
+        for (y = 0; y < window_height; ++y)
+        {
+            color_ref = GetPixel(hdc, x, y);
+            color = RGB_MAKE(GetRValue(color_ref), GetGValue(color_ref), GetBValue(color_ref));
+            if (color != 0x0000ff)
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    todo_wine ok(!do_break, "Expected color 0x%06x at %d,%d, got 0x%06x.\n", 0x0000ff, x, y, color);
+
+    /* Test a destination rectangle that spans the primary monitor and the secondary monitor.
+     * Expect only the part on the primary monitor is updated */
+    memset(&fx, 0, sizeof(fx));
+    fx.dwSize = sizeof(fx);
+    fx.dwFillColor = 0x00ff00;
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+    rect = window_rect;
+    OffsetRect(&rect, -40, 0);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, primary_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    /* Verify that the part on the primary surface is updated */
+    do_break = FALSE;
+    for (x = primary_width - 40; x < primary_width; ++x)
+    {
+        for (y = 0; y < window_height; ++y)
+        {
+            color = get_surface_color(offscreen_surface, x, y);
+            if (color == 0xffffff)
+                continue;
+
+            if (color != 0x00ff00)
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    todo_wine ok(!do_break, "Expected color 0x%06x at %d,%d, got 0x%06x\n", 0x00ff00, x, y, color);
+
+    /* Verify that the test window is not updated */
+    do_break = FALSE;
+    for (x = 0; x < window_width; ++x)
+    {
+        for (y = 0; y < window_height; ++y)
+        {
+            color_ref = GetPixel(hdc, x, y);
+            color = RGB_MAKE(GetRValue(color_ref), GetGValue(color_ref), GetBValue(color_ref));
+            if (color != 0x0000ff)
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    todo_wine ok(!do_break, "Expected color 0x%06x at %d,%d, got 0x%06x.\n", 0x0000ff, x, y, color);
+
+    OffsetRect(&window_rect, 100, 100);
+    MoveWindow(window, window_rect.left, window_rect.top, window_width, window_height, FALSE);
+
+    memset(&fx, 0, sizeof(fx));
+    fx.dwSize = sizeof(fx);
+    fx.dwFillColor = 0xff0000;
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    /* Destination rectangles that are larger than the test window have no effect and return DD_OK */
+    SetRect(&rect, window_rect.left - 1, window_rect.top, window_rect.right, window_rect.bottom);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, window_rect.left, window_rect.top - 1, window_rect.right, window_rect.bottom);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, window_rect.left, window_rect.top, window_rect.right + 1, window_rect.bottom);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, window_rect.left, window_rect.top, window_rect.right, window_rect.bottom + 1);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    /* Destination rectangle that is smaller than the test window */
+    SetRect(&rect, window_rect.left + 1, window_rect.top + 1, window_rect.right - 1, window_rect.bottom - 1);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    do_break = FALSE;
+    for (x = 0; x < window_width; ++x)
+    {
+        for (y = 0; y < window_height; ++y)
+        {
+            color_ref = GetPixel(hdc, x, y);
+            color = RGB_MAKE(GetRValue(color_ref), GetGValue(color_ref), GetBValue(color_ref));
+            if (color != ((x == 0 || x == window_width - 1 || y == 0 || y == window_height - 1)
+                    ? 0x0000ff : 0xff0000))
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    todo_wine ok(!do_break, "Expected color 0x%06x at %d,%d, got 0x%06x.\n",
+            (x == 0 || x == window_width - 1 || y == 0 || y == window_height - 1) ? 0x0000ff : 0xff0000,
+            x, y, color);
+
+    /* OFFSCREENPLAIN surface doesn't support destination rectangles on the secondary monitor */
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, &window_rect, primary_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DDERR_INVALIDRECT, "Blt failed, hr %#x\n", hr);
+
+    /* IDirectDrawSurface7_BltFast doesn't support blitting to the secondary monitor */
+    hr = IDirectDrawSurface7_BltFast(primary_surface, window_rect.left, window_rect.top,
+            offscreen_surface, NULL, DDBLTFAST_WAIT);
+    ok(hr == DDERR_INVALIDRECT, "Blt failed, hr %#x\n", hr);
+
+    /* Maximum accepted destination rectangle is the virtual screen */
+    hr = IDirectDrawSurface7_Blt(primary_surface, &virtual_rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, virtual_rect.left - 1, virtual_rect.top, virtual_rect.right, virtual_rect.bottom);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DDERR_INVALIDRECT, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, virtual_rect.left, virtual_rect.top - 1, virtual_rect.right, virtual_rect.bottom);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DDERR_INVALIDRECT, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, virtual_rect.left, virtual_rect.top, virtual_rect.right + 1, virtual_rect.bottom);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DDERR_INVALIDRECT, "Blt failed, hr %#x\n", hr);
+
+    SetRect(&rect, virtual_rect.left, virtual_rect.top, virtual_rect.right, virtual_rect.bottom + 1);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    ok(hr == DDERR_INVALIDRECT, "Blt failed, hr %#x\n", hr);
+
+    /* Test blit with clipper set */
+    memset(&fx, 0, sizeof(fx));
+    fx.dwSize = sizeof(fx);
+    fx.dwFillColor = 0x00ffff;
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &window_rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    clipper_window = CreateWindowA("static", "ddraw_test_clipper", WS_POPUP | WS_VISIBLE,
+            window_rect.left, window_rect.top, window_width / 2, window_height / 2, NULL, NULL, NULL, NULL);
+    ok(clipper_window != NULL, "CreateWindowA failed, error %#x\n", GetLastError());
+
+    hr = IDirectDraw7_CreateClipper(ddraw, 0, &clipper, NULL);
+    ok(hr == DD_OK, "CreateClipper failed, hr %#x\n", hr);
+    hr = IDirectDrawClipper_SetHWnd(clipper, 0, clipper_window);
+    ok(hr == DD_OK, "SetHWnd failed, hr %#x\n", hr);
+    hr = IDirectDrawSurface7_SetClipper(primary_surface, clipper);
+    ok(hr == DD_OK, "SetClipper failed, hr %#x\n", hr);
+
+    memset(&fx, 0, sizeof(fx));
+    fx.dwSize = sizeof(fx);
+    fx.dwFillColor = 0xff00ff;
+    hr = IDirectDrawSurface7_Blt(offscreen_surface, NULL, NULL, NULL, DDBLT_WAIT | DDBLT_COLORFILL, &fx);
+    ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+    hr = IDirectDrawSurface7_Blt(primary_surface, &window_rect, offscreen_surface, NULL, DDBLT_WAIT, NULL);
+    todo_wine ok(hr == DD_OK, "Blt failed, hr %#x\n", hr);
+
+    /* Test window got filled only with 0x00ffff */
+    do_break = FALSE;
+    for (x = 0; x < window_width; ++x)
+    {
+        for (y = 0; y < window_height; ++y)
+        {
+            color_ref = GetPixel(hdc, x, y);
+            color = RGB_MAKE(GetRValue(color_ref), GetGValue(color_ref), GetBValue(color_ref));
+            if (color != 0x00ffff)
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    todo_wine ok(!do_break, "Expected color 0x%06x at %d,%d, got 0x%06x.\n", 0x00ffff, x, y, color);
+    ReleaseDC(window, hdc);
+
+    /* Clipper window got filled with 0xff00ff */
+    hdc = GetDC(clipper_window);
+    do_break = FALSE;
+    for (x = 0; x < window_width / 2; ++x)
+    {
+        for (y = 0; y < window_height / 2; ++y)
+        {
+            color_ref = GetPixel(hdc, x, y);
+            color = RGB_MAKE(GetRValue(color_ref), GetGValue(color_ref), GetBValue(color_ref));
+            if (color != 0xff00ff)
+            {
+                do_break = TRUE;
+                break;
+            }
+        }
+
+        if (do_break)
+            break;
+    }
+    todo_wine ok(!do_break, "Expected color 0x%06x at %d,%d, got 0x%06x.\n", 0xff00ff, x, y, color);
+    ReleaseDC(clipper_window, hdc);
+
+    IDirectDrawClipper_Release(clipper);
+    IDirectDrawSurface7_Release(offscreen_surface);
+    IDirectDrawSurface7_Release(primary_surface);
+    IDirectDraw7_Release(ddraw);
+    DestroyWindow(window);
+    DestroyWindow(clipper_window);
+    DestroyWindow(fullscreen_window);
+
+    UnregisterClassA("FullscreenClass", GetModuleHandleA(0));
+    if (restore_secondary)
+        ChangeDisplaySettingsExW(monitor_info.secondary_adapter, &old_dm, 0, CDS_RESET, NULL);
+}
+
 START_TEST(ddraw7)
 {
     DDDEVICEIDENTIFIER2 identifier;
@@ -18858,5 +19294,7 @@ START_TEST(ddraw7)
     test_cursor_clipping();
     test_window_position();
     test_get_display_mode();
+    test_multi_monitor_blt();
+
     run_for_each_device_type(test_texture_wrong_caps);
 }
