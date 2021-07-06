@@ -183,9 +183,6 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
             COMCTL32_hPattern55AABitmap = CreateBitmap (8, 8, 1, 1, wPattern55AA);
             COMCTL32_hPattern55AABrush = CreatePatternBrush (COMCTL32_hPattern55AABitmap);
 
-	    /* Get all the colors at DLL load */
-	    COMCTL32_RefreshSysColors();
-
             /* like comctl32 5.82+ register all the common control classes */
             ANIMATE_Register ();
             COMBOEX_Register ();
@@ -211,6 +208,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
             /* Call IsThemeActive() so that delay-loaded uxtheme.dll is loaded for hooking user32 */
             IsThemeActive();
+
+            /* Get all the colors at DLL load */
+            COMCTL32_RefreshSysColors();
             break;
 
 	case DLL_PROCESS_DETACH:
