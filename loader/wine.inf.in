@@ -38,6 +38,7 @@ AddReg=\
     CurrentVersion,\
     Debugger,\
     DirectX,\
+    DPI,\
     Fonts,\
     MCI,\
     Misc,\
@@ -63,6 +64,7 @@ AddReg=\
     CurrentVersion,\
     Debugger,\
     DirectX,\
+    DPI,\
     Fonts,\
     MCI,\
     Misc,\
@@ -91,6 +93,7 @@ AddReg=\
     CurrentVersionWow64,\
     Debugger,\
     DirectX,\
+    DPI,\
     Fonts,\
     MCI,\
     Misc,\
@@ -119,6 +122,7 @@ AddReg=\
     CurrentVersionWow64,\
     Debugger,\
     DirectX,\
+    DPI,\
     Fonts,\
     MCI,\
     Misc,\
@@ -3841,6 +3845,9 @@ HKCU,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ThemeActive",,"1"
 HKCU,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","DllName",,"%10%\resources\themes\light\light.msstyles"
 HKCU,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","ColorName",,"Blue"
 HKCU,"Software\Microsoft\Windows\CurrentVersion\ThemeManager","SizeName",,"NormalSize"
+
+[DPI]
+HKCU,"Control Panel\Desktop","LogPixels",0x10001,192
 
 [WinmgmtService]
 Description="Provides access to Windows Management Instrumentation"
