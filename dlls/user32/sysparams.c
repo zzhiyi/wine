@@ -4890,6 +4890,16 @@ LONG WINAPI DisplayConfigGetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_HEADER *packet)
     }
 }
 
+LONG WINAPI DisplayConfigSetDeviceInfo(DISPLAYCONFIG_DEVICE_INFO_HEADER *packet)
+{
+    FIXME("%p stub.\n", packet);
+
+    if (!packet || packet->size < sizeof(*packet))
+        return ERROR_GEN_FAILURE;
+
+    return ERROR_NOT_SUPPORTED;
+}
+
 /***********************************************************************
  *              SetDisplayConfig (USER32.@)
  */

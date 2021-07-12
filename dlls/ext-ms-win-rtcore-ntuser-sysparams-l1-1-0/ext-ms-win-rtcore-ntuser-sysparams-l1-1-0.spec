@@ -1,6 +1,6 @@
 @ stdcall ChangeDisplaySettingsExW(wstr ptr long long ptr) user32.ChangeDisplaySettingsExW
 @ stdcall DisplayConfigGetDeviceInfo(ptr) user32.DisplayConfigGetDeviceInfo
-@ stub DisplayConfigSetDeviceInfo
+@ stdcall DisplayConfigSetDeviceInfo(ptr) user32.DisplayConfigSetDeviceInfo
 @ stdcall EnumDisplayDevicesW(wstr long ptr long) user32.EnumDisplayDevicesW
 @ stdcall EnumDisplayMonitors(long ptr ptr long) user32.EnumDisplayMonitors
 @ stdcall EnumDisplaySettingsExW(wstr long ptr long) user32.EnumDisplaySettingsExW
