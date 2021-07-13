@@ -20,9 +20,15 @@
 
 #include <stdarg.h>
 
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+
 #include "windows.h"
 #include "vfwmsgs.h"
 #include "uxtheme.h"
+#include "tmschema.h"
+#include "winternl.h"
+#include "ddk/d3dkmthk.h"
 
 #include "msg.h"
 #include "wine/test.h"
@@ -36,6 +42,14 @@ static HDC (WINAPI *pGetBufferedPaintDC)(HPAINTBUFFER);
 static HDC (WINAPI *pGetBufferedPaintTargetDC)(HPAINTBUFFER);
 static HRESULT (WINAPI *pGetBufferedPaintTargetRect)(HPAINTBUFFER, RECT *);
 
+static NTSTATUS (WINAPI *pD3DKMTCloseAdapter)(const D3DKMT_CLOSEADAPTER *);
+static NTSTATUS (WINAPI *pD3DKMTOpenAdapterFromGdiDisplayName)(D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME *);
+
+static LONG (WINAPI *pDisplayConfigGetDeviceInfo)(DISPLAYCONFIG_DEVICE_INFO_HEADER *);
+static LONG (WINAPI *pDisplayConfigSetDeviceInfo)(DISPLAYCONFIG_DEVICE_INFO_HEADER *);
+static UINT (WINAPI *pGetDpiForWindow)(HWND);
+static DPI_AWARENESS_CONTEXT (WINAPI *pSetThreadDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
+
 /* For message tests */
 enum seq_index
 {
@@ -48,20 +62,30 @@ static struct msg_sequence *sequences[NUM_MSG_SEQUENCES];
 
 static void init_funcs(void)
 {
-    HMODULE hUxtheme = GetModuleHandleA("uxtheme.dll");
+    HMODULE uxtheme = GetModuleHandleA("uxtheme.dll");
+    HMODULE gdi32 = GetModuleHandleA("gdi32.dll");
+    HMODULE user32 = GetModuleHandleA("user32.dll");
 
-#define UXTHEME_GET_PROC(func) p ## func = (void*)GetProcAddress(hUxtheme, #func)
-    UXTHEME_GET_PROC(BeginBufferedPaint);
-    UXTHEME_GET_PROC(BufferedPaintClear);
-    UXTHEME_GET_PROC(EndBufferedPaint);
-    UXTHEME_GET_PROC(GetBufferedPaintBits);
-    UXTHEME_GET_PROC(GetBufferedPaintDC);
-    UXTHEME_GET_PROC(GetBufferedPaintTargetDC);
-    UXTHEME_GET_PROC(GetBufferedPaintTargetRect);
-    UXTHEME_GET_PROC(BufferedPaintClear);
+#define GET_PROC(module, func) p##func = (void *)GetProcAddress(module, #func)
 
-    UXTHEME_GET_PROC(OpenThemeDataEx);
-#undef UXTHEME_GET_PROC
+    GET_PROC(uxtheme, BeginBufferedPaint);
+    GET_PROC(uxtheme, BufferedPaintClear);
+    GET_PROC(uxtheme, EndBufferedPaint);
+    GET_PROC(uxtheme, GetBufferedPaintBits);
+    GET_PROC(uxtheme, GetBufferedPaintDC);
+    GET_PROC(uxtheme, GetBufferedPaintTargetDC);
+    GET_PROC(uxtheme, GetBufferedPaintTargetRect);
+    GET_PROC(uxtheme, BufferedPaintClear);
+    GET_PROC(uxtheme, OpenThemeDataEx);
+
+    GET_PROC(gdi32, D3DKMTCloseAdapter);
+    GET_PROC(gdi32, D3DKMTOpenAdapterFromGdiDisplayName);
+
+    GET_PROC(user32, DisplayConfigGetDeviceInfo);
+    GET_PROC(user32, DisplayConfigSetDeviceInfo);
+    GET_PROC(user32, GetDpiForWindow);
+    GET_PROC(user32, SetThreadDpiAwarenessContext);
+#undef GET_PROC
 }
 
 /* Try to make sure pending X events have been processed before continuing */
@@ -80,6 +104,113 @@ static void flush_events(void)
             DispatchMessageA(&msg);
         diff = time - GetTickCount();
     }
+}
+
+static unsigned int get_primary_dpi(void)
+{
+    DPI_AWARENESS_CONTEXT old_context;
+    unsigned int dpi;
+    HWND hwnd;
+
+    if (!pSetThreadDpiAwarenessContext || !pGetDpiForWindow)
+        return 0;
+
+    old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    hwnd = CreateWindowA("static", "dpi_test", WS_POPUP, 0, 0, 1, 1, NULL, NULL, NULL, NULL);
+    dpi = pGetDpiForWindow(hwnd);
+    DestroyWindow(hwnd);
+    pSetThreadDpiAwarenessContext(old_context);
+
+    return dpi;
+}
+
+static int get_dpi_scale_index(int dpi)
+{
+    static const int scales[] = {100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500};
+    int scale, scale_idx;
+
+    scale = dpi * 100 / 96;
+    for (scale_idx = 0; scale_idx < ARRAY_SIZE(scales); ++scale_idx)
+    {
+        if (scales[scale_idx] == scale)
+            return scale_idx;
+    }
+
+    return -1;
+}
+
+static BOOL set_primary_dpi(unsigned int dpi)
+{
+    D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open_adapter_gdi_desc;
+    int current_scale_idx, target_scale_idx, primary_dpi;
+    DISPLAYCONFIG_GET_SOURCE_DPI_SCALE get_scale_req;
+    DISPLAYCONFIG_SET_SOURCE_DPI_SCALE set_scale_req;
+    D3DKMT_CLOSEADAPTER close_adapter_desc;
+    BOOL ret = FALSE;
+    NTSTATUS status;
+    LONG error;
+
+#define CHECK_FUNC(func)                       \
+    if (!p##func)                              \
+    {                                          \
+        skip("%s() is unavailable.\n", #func); \
+        return FALSE;                          \
+    }
+
+    CHECK_FUNC(D3DKMTCloseAdapter)
+    CHECK_FUNC(D3DKMTOpenAdapterFromGdiDisplayName)
+    CHECK_FUNC(DisplayConfigGetDeviceInfo)
+    CHECK_FUNC(DisplayConfigSetDeviceInfo)
+
+#undef CHECK_FUNC
+
+    lstrcpyW(open_adapter_gdi_desc.DeviceName, L"\\\\.\\DISPLAY1");
+    if (pD3DKMTOpenAdapterFromGdiDisplayName(&open_adapter_gdi_desc) == STATUS_PROCEDURE_NOT_FOUND)
+    {
+        win_skip("D3DKMTOpenAdapterFromGdiDisplayName() is unavailable.\n");
+        return FALSE;
+    }
+
+    get_scale_req.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_DPI_SCALE;
+    get_scale_req.header.size = sizeof(get_scale_req);
+    get_scale_req.header.adapterId = open_adapter_gdi_desc.AdapterLuid;
+    get_scale_req.header.id = open_adapter_gdi_desc.VidPnSourceId;
+    error = pDisplayConfigGetDeviceInfo(&get_scale_req.header);
+    if (error != NO_ERROR)
+    {
+        skip("DisplayConfigGetDeviceInfo failed, returned %d.\n", error);
+        goto failed;
+    }
+
+    primary_dpi = get_primary_dpi();
+    if (!primary_dpi)
+    {
+        skip("Failed to get primary display dpi.\n");
+        goto failed;
+    }
+
+    current_scale_idx = get_dpi_scale_index(primary_dpi);
+    ok(current_scale_idx != -1, "Failed to get primary scale index.\n");
+    target_scale_idx = get_dpi_scale_index(dpi);
+    if (target_scale_idx == -1)
+    {
+        skip("Failed to find target scale.\n");
+        goto failed;
+    }
+
+    set_scale_req.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_SOURCE_DPI_SCALE;
+    set_scale_req.header.size = sizeof(set_scale_req);
+    set_scale_req.header.adapterId = open_adapter_gdi_desc.AdapterLuid;
+    set_scale_req.header.id = open_adapter_gdi_desc.VidPnSourceId;
+    set_scale_req.relativeScaleStep = get_scale_req.curRelativeScaleStep + (target_scale_idx - current_scale_idx);
+    error = pDisplayConfigSetDeviceInfo(&set_scale_req.header);
+    ret = error == NO_ERROR;
+
+failed:
+    close_adapter_desc.hAdapter = open_adapter_gdi_desc.hAdapter;
+    status = pD3DKMTCloseAdapter(&close_adapter_desc);
+    ok(status == STATUS_SUCCESS, "Got unexpected return code %#x.\n", status);
+    return ret;
 }
 
 static LRESULT WINAPI TestSetWindowThemeParentProcA(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -827,6 +958,94 @@ todo_wine
     DeleteDC(target);
 }
 
+static void test_GetThemePartSize(void)
+{
+    DPI_AWARENESS_CONTEXT old_context;
+    unsigned int dpi, old_dpi;
+    int bg_type, sizing_type;
+    SIZE size, scaled_size;
+    HTHEME htheme;
+    HRESULT hr;
+    HWND hwnd;
+    RECT rect;
+    BOOL ret;
+    HDC hdc;
+
+    if (!pSetThreadDpiAwarenessContext)
+    {
+        win_skip("SetThreadDpiAwarenessContext() is unavailable.\n");
+        return;
+    }
+
+    if (!IsThemeActive())
+    {
+        skip("No active theme, skipping rest of GetThemePartSize tests.\n");
+        return;
+    }
+
+    old_dpi = get_primary_dpi();
+    if (!old_dpi)
+    {
+        skip("Failed to get primary display dpi.\n");
+        return;
+    }
+
+    ret = set_primary_dpi(96);
+    if (!ret)
+    {
+        skip("Failed to set primary display dpi.\n");
+        return;
+    }
+    dpi = get_primary_dpi();
+    ok(dpi == 96, "expected %d, got %d.\n", 96, dpi);
+
+    old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    hwnd = CreateWindowA("static", "dpi_test", WS_POPUP, 0, 0, 100, 100, NULL, NULL, NULL, NULL);
+    hdc = GetDC(hwnd);
+
+    htheme = OpenThemeData(NULL, WC_SCROLLBARW);
+    hr = GetThemeEnumValue(htheme, SBP_SIZEBOX, SZB_RIGHTALIGN, TMT_BGTYPE, &bg_type);
+    ok(hr == S_OK, "GetThemeEnumValue failed, got hr %#x.\n", hr);
+    ok(bg_type == BT_IMAGEFILE, "Expected %d, got %d.\n", BT_IMAGEFILE, bg_type);
+
+    hr = GetThemeEnumValue(htheme, SBP_SIZEBOX, SZB_RIGHTALIGN, TMT_SIZINGTYPE, &sizing_type);
+    ok(hr == S_OK, "GetThemeEnumValue failed, got hr %#x.\n", hr);
+    ok(sizing_type == ST_TRUESIZE, "Expected %d, got %d.\n", ST_TRUESIZE, sizing_type);
+
+    GetClientRect(hwnd, &rect);
+    hr = GetThemePartSize(htheme, hdc, SBP_SIZEBOX, SZB_RIGHTALIGN, &rect, TS_DRAW, &size);
+    ok(hr == S_OK, "GetThemePartSize failed, got hr %#x.\n", hr);
+
+    ret = set_primary_dpi(120);
+    ok(ret, "set_primary_dpi failed.\n");
+    dpi = get_primary_dpi();
+    ok(dpi == 120, "expected %d, got %d.\n", 120, dpi);
+
+    CloseThemeData(htheme);
+    htheme = OpenThemeData(NULL, WC_SCROLLBARW);
+    ReleaseDC(hwnd, hdc);
+    DestroyWindow(hwnd);
+    hwnd = CreateWindowA("static", "dpi_test", WS_POPUP, 0, 0, 100, 100, NULL, NULL, NULL, NULL);
+    hdc = GetDC(hwnd);
+
+    /* Size is not scaled by DPI */
+    GetClientRect(hwnd, &rect);
+    hr = GetThemePartSize(htheme, hdc, SBP_SIZEBOX, SZB_RIGHTALIGN, &rect, TS_DRAW, &scaled_size);
+    ok(hr == S_OK, "GetThemePartSize failed, got hr %#x.\n", hr);
+    ok(scaled_size.cx == size.cx, "Expected %d, got %d.\n", size.cx, scaled_size.cx);
+    ok(scaled_size.cy == size.cy, "Expected %d, got %d.\n", size.cy, scaled_size.cy);
+
+    CloseThemeData(htheme);
+    ReleaseDC(hwnd, hdc);
+    DestroyWindow(hwnd);
+    ret = set_primary_dpi(old_dpi);
+    ok(ret, "set_primary_dpi failed.\n");
+    dpi = get_primary_dpi();
+    ok(dpi == old_dpi, "expected dpi %d, got %d.\n", old_dpi, dpi);
+    pSetThreadDpiAwarenessContext(old_context);
+}
+
 START_TEST(system)
 {
     init_funcs();
@@ -844,4 +1063,5 @@ START_TEST(system)
     test_GetCurrentThemeName();
     test_CloseThemeData();
     test_buffered_paint();
+    test_GetThemePartSize();
 }
