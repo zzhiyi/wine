@@ -1499,7 +1499,9 @@ static LRESULT FILEDLG95_InitControls(HWND hwnd)
    {VIEW_LIST,         FCIDM_TB_SMALLICON,  TBSTATE_ENABLED, BTNS_BUTTON, {0, 0}, 0, 0 },
    {VIEW_DETAILS,      FCIDM_TB_REPORTVIEW, TBSTATE_ENABLED, BTNS_BUTTON, {0, 0}, 0, 0 },
   };
-  static const TBADDBITMAP tba = {HINST_COMMCTRL, IDB_VIEW_SMALL_COLOR};
+  int dpi, button_width, button_height, scaled_button_width;
+  DWORD button_size;
+  TBADDBITMAP tba;
 
   RECT rectTB;
   RECT rectlook;
@@ -1570,7 +1572,32 @@ static LRESULT FILEDLG95_InitControls(HWND hwnd)
 /* FIXME: use TB_LOADIMAGES when implemented */
 /*  SendMessageW(fodInfos->DlgInfos.hwndTB, TB_LOADIMAGES, IDB_VIEW_SMALL_COLOR, HINST_COMMCTRL);*/
   SendMessageW(fodInfos->DlgInfos.hwndTB, TB_SETMAXTEXTROWS, 0, 0);
+
+  dpi = GetDpiForWindow(hwnd);
+  tba.hInst = HINST_COMMCTRL;
+  tba.nID = dpi >= 144 ? IDB_VIEW_LARGE_COLOR : IDB_VIEW_SMALL_COLOR;
   SendMessageW(fodInfos->DlgInfos.hwndTB, TB_ADDBITMAP, 12, (LPARAM) &tba);
+
+  /* Scale button size according to DPI */
+  button_size = SendMessageW(fodInfos->DlgInfos.hwndTB, TB_GETBUTTONSIZE, 0, 0);
+  button_width = LOWORD(button_size);
+  button_height = HIWORD(button_size);
+  if (dpi >= 144)
+  {
+      button_width -= 24;
+      button_height -= 24;
+      scaled_button_width = MulDiv(24, dpi, 144);
+  }
+  else
+  {
+      button_width -= 16;
+      button_height -= 16;
+      scaled_button_width = MulDiv(16, dpi, 96);
+  }
+  /* Same button width and height */
+  button_width += scaled_button_width;
+  button_height += scaled_button_width;
+  SendMessageW(fodInfos->DlgInfos.hwndTB, TB_SETBUTTONSIZE, 0, MAKELPARAM(button_width, button_height));
 
   /* Retrieve and add desktop icon to the toolbar */
   toolbarImageList = (HIMAGELIST)SendMessageW(fodInfos->DlgInfos.hwndTB, TB_GETIMAGELIST, 0, 0L);
@@ -1584,7 +1611,6 @@ static LRESULT FILEDLG95_InitControls(HWND hwnd)
 
   /* Finish Toolbar Construction */
   SendMessageW(fodInfos->DlgInfos.hwndTB, TB_ADDBUTTONSW, 9, (LPARAM) tbb);
-  SendMessageW(fodInfos->DlgInfos.hwndTB, TB_AUTOSIZE, 0, 0);
 
   if (is_places_bar_enabled(fodInfos))
   {
