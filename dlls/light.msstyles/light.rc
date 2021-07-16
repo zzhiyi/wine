@@ -292,8 +292,10 @@ BLUE_INI TEXTFILE
 "UniformSizing = True\r\n"
 "ImageFile1 = blue_commandlink_glyph_30px.bmp\r\n"
 "ImageFile2 = blue_commandlink_glyph_45px.bmp\r\n"
+"ImageFile3 = blue_commandlink_glyph_60px.bmp\r\n"
 "MinDpi1 = 96\r\n"
 "MinDpi2 = 144\r\n"
+"MinDpi3 = 192\r\n"
 
 "\r\n; ComboBox\r\n"
 "[ComboBox]\r\n"
@@ -942,6 +944,9 @@ BLUE_COMMANDLINK_GLYPH_30PX_BMP BITMAP "blue_commandlink_glyph_30px.bmp"
 
 /* @makedep: blue_commandlink_glyph_45px.bmp */
 BLUE_COMMANDLINK_GLYPH_45PX_BMP BITMAP "blue_commandlink_glyph_45px.bmp"
+
+/* @makedep: blue_commandlink_glyph_60px.bmp */
+BLUE_COMMANDLINK_GLYPH_60PX_BMP BITMAP "blue_commandlink_glyph_60px.bmp"
 
 /* ComboBox */
 /* @makedep: blue_combobutton.bmp */
