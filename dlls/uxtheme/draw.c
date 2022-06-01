@@ -2025,8 +2025,14 @@ HRESULT WINAPI GetThemeBackgroundRegion(HTHEME hTheme, HDC hdc, int iPartId,
         if(!*pRegion)
             hr = HRESULT_FROM_WIN32(GetLastError());
     }
+    else if (bgtype == BT_NONE)
+    {
+        *pRegion = CreateRectRgn(0, 0, 0, 0);
+        if (!*pRegion)
+            hr = HRESULT_FROM_WIN32(GetLastError());
+    }
     else {
-        FIXME("Unknown background type\n");
+        FIXME("Unknown background type %d\n", bgtype);
         /* This should never happen, and hence I don't know what to return */
         hr = E_FAIL;
     }
