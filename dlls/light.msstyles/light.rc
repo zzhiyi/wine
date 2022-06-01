@@ -692,6 +692,7 @@ BLUE_INI TEXTFILE
 "ImageCount = 16\r\n"
 "ImageLayout = Vertical\r\n"
 "GlyphType = ImageGlyph\r\n"
+"Transparent = True\r\n"
 "GlyphTransparent = True\r\n"
 "ImageSelectType = Size\r\n"
 "UniformSizing = True\r\n"
