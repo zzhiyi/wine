@@ -523,6 +523,23 @@ static inline void get_transparency (HTHEME hTheme, int iPartId, int iStateId,
     }
 }
 
+/* Reset alpha values to 0xFF */
+static void reset_alpha_values(HDC hdc, const RECT *rect)
+{
+    static const RGBQUAD bitmapBits = {0x0, 0x0, 0x0, 0xFF};
+    BITMAPINFO bi = {0};
+
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = 1;
+    bi.bmiHeader.biHeight = 1;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    StretchDIBits(hdc, rect->left, rect->top, abs(rect->right - rect->left),
+                  abs(rect->bottom - rect->top), 0, 0, 1, 1, &bitmapBits, &bi, DIB_RGB_COLORS,
+                  SRCPAINT);
+}
+
 /***********************************************************************
  *      UXTHEME_DrawImageGlyph
  *
@@ -581,6 +598,12 @@ static HRESULT UXTHEME_DrawImageGlyph(HTHEME hTheme, HDC hdc, int iPartId,
 
     SelectObject(hdcSrc, oldSrc);
     DeleteDC(hdcSrc);
+
+    /* Reset alpha values to 0xFF if the background is not transparent */
+    if (SUCCEEDED(hr) && hasAlpha
+        && !IsThemeBackgroundPartiallyTransparent(hTheme, iPartId, iStateId))
+        reset_alpha_values(hdc, pRect);
+
     return hr;
 }
 
