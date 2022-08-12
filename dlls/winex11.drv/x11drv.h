@@ -716,6 +716,7 @@ extern void init_recursive_mutex( pthread_mutex_t *mutex ) DECLSPEC_HIDDEN;
 
 /* DPI unaware scaling helpers */
 extern RECT dpi_unaware_get_virtual_screen_rect(void) DECLSPEC_HIDDEN;
+extern unsigned int get_window_effective_dpi( void ) DECLSPEC_HIDDEN;
 extern POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to ) DECLSPEC_HIDDEN;
 extern RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to ) DECLSPEC_HIDDEN;
 

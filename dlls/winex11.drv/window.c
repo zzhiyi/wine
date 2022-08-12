@@ -50,6 +50,7 @@
 #include "x11drv.h"
 #include "wingdi.h"
 #include "winuser.h"
+#include "shellscalingapi.h"
 
 #include "wine/debug.h"
 #include "wine/server.h"
@@ -1618,6 +1619,16 @@ RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to )
         rect.bottom = rect.bottom * dpi_to / dpi_from;
     }
     return rect;
+}
+
+unsigned int get_window_effective_dpi(void)
+{
+    RECT rect;
+    INT width;
+
+    rect = NtUserGetVirtualScreenRect();
+    width = NtUserGetSystemMetrics(SM_CXVIRTUALSCREEN);
+    return 96 * (rect.right - rect.right) / width;
 }
 
 /**********************************************************************
