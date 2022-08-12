@@ -72,6 +72,7 @@ Window root_window;
 BOOL usexvidmode = TRUE;
 BOOL usexrandr = TRUE;
 BOOL usexcomposite = TRUE;
+BOOL usexrender = FALSE;
 BOOL use_xkb = TRUE;
 BOOL use_take_focus = TRUE;
 BOOL use_primary_selection = FALSE;
@@ -706,6 +707,7 @@ static NTSTATUS x11drv_init( void *arg )
 #ifdef SONAME_LIBXCOMPOSITE
     X11DRV_XComposite_Init();
 #endif
+    X11DRV_XRender_Init();
     X11DRV_XInput2_Init();
 
 #ifdef HAVE_XKB

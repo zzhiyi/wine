@@ -161,6 +161,11 @@ static inline struct xrender_physdev *get_xrender_dev( PHYSDEV dev )
 
 static const struct gdi_dc_funcs xrender_funcs;
 
+const struct gdi_dc_funcs *get_xrender_funcs(void)
+{
+    return usexrender ? &xrender_funcs : NULL;
+}
+
 static gsCacheEntry *glyphsetCache = NULL;
 static DWORD glyphsetCacheSize = 0;
 static INT lastfree = -1;
@@ -317,14 +322,14 @@ static int load_xrender_formats(void)
  * Let's see if our XServer has the extension available
  *
  */
-const struct gdi_dc_funcs *X11DRV_XRender_Init(void)
+void X11DRV_XRender_Init(void)
 {
     int event_base, i;
 
-    if (!client_side_with_render) return NULL;
-    if (!(xrender_handle = dlopen(SONAME_LIBXRENDER, RTLD_NOW))) return NULL;
+    if (!client_side_with_render) return;
+    if (!(xrender_handle = dlopen(SONAME_LIBXRENDER, RTLD_NOW))) return;
 
-#define LOAD_FUNCPTR(f) if((p##f = dlsym(xrender_handle, #f)) == NULL) return NULL
+#define LOAD_FUNCPTR(f) if((p##f = dlsym(xrender_handle, #f)) == NULL) return
 #define LOAD_OPTIONAL_FUNCPTR(f) p##f = dlsym(xrender_handle, #f)
     LOAD_FUNCPTR(XRenderAddGlyphs);
     LOAD_FUNCPTR(XRenderChangePicture);
@@ -348,7 +353,7 @@ const struct gdi_dc_funcs *X11DRV_XRender_Init(void)
 #undef LOAD_OPTIONAL_FUNCPTR
 #undef LOAD_FUNCPTR
 
-    if (!pXRenderQueryExtension(gdi_display, &event_base, &xrender_error_base)) return NULL;
+    if (!pXRenderQueryExtension(gdi_display, &event_base, &xrender_error_base)) return;
 
     TRACE("Xrender is up and running error_base = %d\n", xrender_error_base);
     if(!load_xrender_formats()) /* This fails in buggy versions of libXrender.so */
@@ -356,13 +361,13 @@ const struct gdi_dc_funcs *X11DRV_XRender_Init(void)
         ERR_(winediag)("Wine has detected that you probably have a buggy version "
                        "of libXrender.  Because of this client side font rendering "
                        "will be disabled.  Please upgrade this library.\n");
-        return NULL;
+        return;
     }
 
     if (!default_visual.red_mask || !default_visual.green_mask || !default_visual.blue_mask)
     {
         WARN("one or more of the colour masks are 0, disabling XRENDER. Try running in 16-bit mode or higher.\n");
-        return NULL;
+        return;
     }
 
     glyphsetCache = calloc( sizeof(*glyphsetCache), INIT_CACHE_SIZE );
@@ -375,7 +380,7 @@ const struct gdi_dc_funcs *X11DRV_XRender_Init(void)
     }
     glyphsetCache[i-1].next = -1;
 
-    return &xrender_funcs;
+    usexrender = TRUE;
 }
 
 /* Helper function to convert from a color packed in a 32-bit integer to a XRenderColor */
@@ -2245,7 +2250,7 @@ static const struct gdi_dc_funcs xrender_funcs =
 
 #else /* SONAME_LIBXRENDER */
 
-const struct gdi_dc_funcs *X11DRV_XRender_Init(void)
+void X11DRV_XRender_Init(void)
 {
     TRACE("XRender support not compiled in.\n");
     return NULL;

@@ -66,7 +66,7 @@ void init_recursive_mutex( pthread_mutex_t *mutex )
 static void device_init(void)
 {
     /* Initialize XRender */
-    xrender_funcs = X11DRV_XRender_Init();
+    xrender_funcs = get_xrender_funcs();
 
     /* Init Xcursor */
     X11DRV_Xcursor_Init();
