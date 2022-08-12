@@ -22,6 +22,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "ntstatus.h"
+#define WIN32_NO_STATUS
+
 #include "wine/test.h"
 #include "windef.h"
 #include "winbase.h"
@@ -29,7 +32,11 @@
 #include "winreg.h"
 #include "winuser.h"
 #include "winnls.h"
+#include "winternl.h"
+#include "ddk/d3dkmthk.h"
 
+static LONG (WINAPI *pDisplayConfigGetDeviceInfo)(DISPLAYCONFIG_DEVICE_INFO_HEADER*);
+static LONG (WINAPI *pDisplayConfigSetDeviceInfo)(DISPLAYCONFIG_DEVICE_INFO_HEADER*);
 static BOOL (WINAPI *pIsProcessDPIAware)(void);
 static BOOL (WINAPI *pSetProcessDPIAware)(void);
 static BOOL (WINAPI *pSetProcessDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
@@ -49,6 +56,9 @@ static BOOL (WINAPI *pAdjustWindowRectExForDpi)(LPRECT,DWORD,BOOL,DWORD,UINT);
 static BOOL (WINAPI *pLogicalToPhysicalPointForPerMonitorDPI)(HWND,POINT*);
 static BOOL (WINAPI *pPhysicalToLogicalPointForPerMonitorDPI)(HWND,POINT*);
 static LONG (WINAPI *pGetAutoRotationState)(PAR_STATE);
+
+static NTSTATUS (WINAPI *pD3DKMTCloseAdapter)(const D3DKMT_CLOSEADAPTER*);
+static NTSTATUS (WINAPI *pD3DKMTOpenAdapterFromGdiDisplayName)(D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME*);
 
 static BOOL strict;
 static int dpi, real_dpi;
@@ -192,22 +202,112 @@ static BOOL get_reg_dword(HKEY base, const char *key_name, const char *value_nam
     return ret;
 }
 
-static DWORD get_real_dpi(void)
+static unsigned int get_primary_monitor_effective_dpi(void)
 {
-    DWORD dpi;
+    DPI_AWARENESS_CONTEXT old_context;
+    UINT dpi_x = 0, dpi_y = 0;
+    POINT point = {0, 0};
+    HMONITOR monitor;
+    DWORD value = 0;
 
-    if (pSetThreadDpiAwarenessContext)
+    if (pSetThreadDpiAwarenessContext && pGetDpiForMonitorInternal)
     {
-        DPI_AWARENESS_CONTEXT context = pSetThreadDpiAwarenessContext( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
-        dpi = pGetDpiForSystem();
-        pSetThreadDpiAwarenessContext( context );
-        return dpi;
+        old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+        monitor = MonitorFromPoint(point, MONITOR_DEFAULTTOPRIMARY);
+        pGetDpiForMonitorInternal(monitor, 0, &dpi_x, &dpi_y);
+        pSetThreadDpiAwarenessContext(old_context);
+        return dpi_y;
     }
-    if (get_reg_dword(HKEY_CURRENT_USER, "Control Panel\\Desktop", "LogPixels", &dpi))
-        return dpi;
-    if (get_reg_dword(HKEY_CURRENT_CONFIG, "Software\\Fonts", "LogPixels", &dpi))
-        return dpi;
+    if (get_reg_dword(HKEY_CURRENT_USER, "Control Panel\\Desktop", "LogPixels", &value))
+        return value;
+    if (get_reg_dword(HKEY_CURRENT_CONFIG, "Software\\Fonts", "LogPixels", &value))
+        return value;
     return USER_DEFAULT_SCREEN_DPI;
+}
+
+static int get_dpi_scale_index(int target_dpi)
+{
+    static const int scales[] = {100, 125, 150, 175, 200, 225, 250, 300, 350, 400, 450, 500};
+    int scale, scale_idx;
+
+    scale = target_dpi * 100 / USER_DEFAULT_SCREEN_DPI;
+    for (scale_idx = 0; scale_idx < ARRAY_SIZE(scales); ++scale_idx)
+    {
+        if (scales[scale_idx] == scale)
+            return scale_idx;
+    }
+
+    return -1;
+}
+
+static BOOL set_primary_monitor_effective_dpi(unsigned int primary_dpi)
+{
+    D3DKMT_OPENADAPTERFROMGDIDISPLAYNAME open_adapter_gdi_desc;
+    DISPLAYCONFIG_GET_SOURCE_DPI_SCALE get_scale_req;
+    DISPLAYCONFIG_SET_SOURCE_DPI_SCALE set_scale_req;
+    int current_scale_idx, target_scale_idx;
+    D3DKMT_CLOSEADAPTER close_adapter_desc;
+    BOOL ret = FALSE;
+    LONG error;
+
+#define CHECK_FUNC(func)                       \
+    if (!p##func)                              \
+    {                                          \
+        skip("%s() is unavailable.\n", #func); \
+        return FALSE;                          \
+    }
+
+    CHECK_FUNC(D3DKMTCloseAdapter)
+    CHECK_FUNC(D3DKMTOpenAdapterFromGdiDisplayName)
+    CHECK_FUNC(DisplayConfigGetDeviceInfo)
+    CHECK_FUNC(DisplayConfigSetDeviceInfo)
+
+#undef CHECK_FUNC
+
+    lstrcpyW(open_adapter_gdi_desc.DeviceName, L"\\\\.\\DISPLAY1");
+    if (pD3DKMTOpenAdapterFromGdiDisplayName(&open_adapter_gdi_desc) == STATUS_PROCEDURE_NOT_FOUND)
+    {
+        win_skip("D3DKMTOpenAdapterFromGdiDisplayName() is unavailable.\n");
+        return FALSE;
+    }
+
+    get_scale_req.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_DPI_SCALE;
+    get_scale_req.header.size = sizeof(get_scale_req);
+    get_scale_req.header.adapterId = open_adapter_gdi_desc.AdapterLuid;
+    get_scale_req.header.id = open_adapter_gdi_desc.VidPnSourceId;
+    error = pDisplayConfigGetDeviceInfo(&get_scale_req.header);
+    if (error != NO_ERROR)
+    {
+        skip("DisplayConfigGetDeviceInfo failed, returned %ld.\n", error);
+        goto failed;
+    }
+
+    current_scale_idx = get_dpi_scale_index(get_primary_monitor_effective_dpi());
+    if (current_scale_idx == -1)
+    {
+        skip("Failed to find current scale index.\n");
+        goto failed;
+    }
+
+    target_scale_idx = get_dpi_scale_index(primary_dpi);
+    if (target_scale_idx == -1)
+    {
+        skip("Failed to find target scale index.\n");
+        goto failed;
+    }
+
+    set_scale_req.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_SOURCE_DPI_SCALE;
+    set_scale_req.header.size = sizeof(set_scale_req);
+    set_scale_req.header.adapterId = open_adapter_gdi_desc.AdapterLuid;
+    set_scale_req.header.id = open_adapter_gdi_desc.VidPnSourceId;
+    set_scale_req.relativeScaleStep = get_scale_req.curRelativeScaleStep + (target_scale_idx - current_scale_idx);
+    error = pDisplayConfigSetDeviceInfo(&set_scale_req.header);
+    ret = (error == NO_ERROR);
+
+failed:
+    close_adapter_desc.hAdapter = open_adapter_gdi_desc.hAdapter;
+    pD3DKMTCloseAdapter(&close_adapter_desc);
+    return ret;
 }
 
 static LRESULT CALLBACK SysParamsTestWndProc( HWND hWnd, UINT msg, WPARAM wParam,
@@ -4135,9 +4235,93 @@ static void test_GetAutoRotationState(void)
     ok(ret, "Expected GetAutoRotationState to succeed, error %ld\n", GetLastError());
 }
 
+static void test_dpi_unaware(void)
+{
+    int dpi_unaware_width, dpi_unaware_height;
+    int dpi_aware_width, dpi_aware_height;
+    int expected_width, expected_height;
+    DPI_AWARENESS_CONTEXT old_context;
+    unsigned int old_dpi, current_dpi;
+    RECT window_rect, expected_rect;
+    HWND hwnd;
+    BOOL ret;
+    HDC hdc;
+
+    if (!pSetThreadDpiAwarenessContext)
+    {
+        win_skip("pSetThreadDpiAwarenessContext is unavailable.\n");
+        return;
+    }
+
+    current_dpi = get_primary_monitor_effective_dpi();
+    old_dpi = current_dpi;
+
+    /* Try to change DPI if the current DPI is 96 */
+    if (current_dpi == 96)
+    {
+        if (!set_primary_monitor_effective_dpi(120))
+        {
+            skip("Failed to set primary monitor dpi to other than 96.\n");
+            return;
+        }
+
+        current_dpi = get_primary_monitor_effective_dpi();
+        ok(current_dpi == 120, "Expected dpi 120, got %d.\n", current_dpi);
+    }
+
+    old_context = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE);
+
+    /* DPI unaware window rect */
+    hwnd = CreateWindowA("static", "dpi_unaware", WS_POPUP, 0, 0, 100, 100, NULL, NULL, NULL, NULL);
+    ok(!!hwnd, "CreateWindowA failed, error %lu.\n", GetLastError());
+    GetWindowRect(hwnd, &window_rect);
+    SetRect(&expected_rect, 0, 0, 100, 100);
+    ok(EqualRect(&window_rect, &expected_rect), "Expected rect %s, got %s.\n",
+       wine_dbgstr_rect(&expected_rect), wine_dbgstr_rect(&window_rect));
+
+    /* DPI unaware window DC */
+    hdc = GetDC(hwnd);
+    dpi_unaware_width = GetDeviceCaps(hdc, HORZRES);
+    dpi_unaware_height = GetDeviceCaps(hdc, VERTRES);
+    ReleaseDC(hwnd, hdc);
+
+    pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+
+    /* DPI aware window rect */
+    GetWindowRect(hwnd, &window_rect);
+    expected_rect.right = MulDiv(100, current_dpi, 96);
+    expected_rect.bottom = MulDiv(100, current_dpi, 96);
+    ok(EqualRect(&window_rect, &expected_rect), "Expected rect %s, got %s.\n",
+       wine_dbgstr_rect(&expected_rect), wine_dbgstr_rect(&window_rect));
+
+    /* DPI aware window DC */
+    hdc = GetDC(hwnd);
+    dpi_aware_width = GetDeviceCaps(hdc, HORZRES);
+    dpi_aware_height = GetDeviceCaps(hdc, VERTRES);
+    expected_width = MulDiv(dpi_unaware_width, current_dpi, 96);
+    expected_height = MulDiv(dpi_unaware_height, current_dpi, 96);
+    ok(dpi_aware_width == expected_width, "Expected width %d, got %d.\n", expected_width,
+       dpi_aware_width);
+    ok(dpi_aware_height == expected_height, "Expected height %d, got %d.\n", expected_height,
+       dpi_aware_height);
+    ReleaseDC(hwnd, hdc);
+
+    DestroyWindow(hwnd);
+    pSetThreadDpiAwarenessContext(old_context);
+
+    if (current_dpi != old_dpi)
+    {
+        ret = set_primary_monitor_effective_dpi(old_dpi);
+        ok(ret, "Set primary monitor dpi failed.\n");
+        current_dpi = get_primary_monitor_effective_dpi();
+        ok(current_dpi == old_dpi, "Expected dpi %d, got %d.\n", old_dpi, current_dpi);
+    }
+}
+
 static void init_function_pointers(void)
 {
     HMODULE user32 = GetModuleHandleA("user32.dll");
+    HMODULE gdi32 = GetModuleHandleA("gdi32.dll");
 
 #define GET_PROC(module, func)                       \
     p##func = (void *)GetProcAddress(module, #func); \
@@ -4145,6 +4329,8 @@ static void init_function_pointers(void)
         trace("GetProcAddress(%s, %s) failed.\n", #module, #func);
 
     GET_PROC(user32, AdjustWindowRectExForDpi)
+    GET_PROC(user32, DisplayConfigGetDeviceInfo)
+    GET_PROC(user32, DisplayConfigSetDeviceInfo)
     GET_PROC(user32, GetAutoRotationState)
     GET_PROC(user32, GetAwarenessFromDpiAwarenessContext)
     GET_PROC(user32, GetDpiForMonitorInternal)
@@ -4163,6 +4349,9 @@ static void init_function_pointers(void)
     GET_PROC(user32, SetProcessDpiAwarenessInternal)
     GET_PROC(user32, SetThreadDpiAwarenessContext)
     GET_PROC(user32, SystemParametersInfoForDpi)
+
+    GET_PROC(gdi32, D3DKMTCloseAdapter)
+    GET_PROC(gdi32, D3DKMTOpenAdapterFromGdiDisplayName)
 
 #undef GET_PROC
 }
@@ -4183,7 +4372,7 @@ START_TEST(sysparams)
     hInstance = GetModuleHandleA( NULL );
     hdc = GetDC(0);
     dpi = GetDeviceCaps( hdc, LOGPIXELSY);
-    real_dpi = get_real_dpi();
+    real_dpi = get_primary_monitor_effective_dpi();
     trace("dpi %d real_dpi %d\n", dpi, real_dpi);
     ReleaseDC( 0, hdc);
 
@@ -4241,4 +4430,5 @@ START_TEST(sysparams)
     else win_skip( "SetThreadDpiAwarenessContext not supported\n" );
 
     test_dpi_aware();
+    test_dpi_unaware();
 }
