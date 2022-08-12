@@ -431,6 +431,9 @@ extern XVisualInfo argb_visual DECLSPEC_HIDDEN;
 extern Colormap default_colormap DECLSPEC_HIDDEN;
 extern XPixmapFormatValues **pixmap_formats DECLSPEC_HIDDEN;
 extern Window root_window DECLSPEC_HIDDEN;
+extern Window invisible_root_window DECLSPEC_HIDDEN;
+extern Drawable root_window_drawable DECLSPEC_HIDDEN;
+extern XID  root_window_damage DECLSPEC_HIDDEN;
 extern BOOL clipping_cursor DECLSPEC_HIDDEN;
 extern BOOL keyboard_grabbed DECLSPEC_HIDDEN;
 extern unsigned int screen_bpp DECLSPEC_HIDDEN;
@@ -568,6 +571,7 @@ extern void X11DRV_register_event_handler( int type, x11drv_event_handler handle
 
 extern BOOL X11DRV_ButtonPress( HWND hwnd, XEvent *event ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_ButtonRelease( HWND hwnd, XEvent *event ) DECLSPEC_HIDDEN;
+extern BOOL X11DRV_DamageNotify( HWND hwnd, XEvent *event ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_MotionNotify( HWND hwnd, XEvent *event ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_EnterNotify( HWND hwnd, XEvent *event ) DECLSPEC_HIDDEN;
 extern BOOL X11DRV_KeyEvent( HWND hwnd, XEvent *event ) DECLSPEC_HIDDEN;
@@ -619,6 +623,8 @@ struct x11drv_win_data
     Colormap    client_colormap; /* colormap for the client window */
     HWND        hwnd;           /* hwnd that this private data belongs to */
     Window      whole_window;   /* X window for the complete window */
+    Drawable    whole_drawable; /* X drawable for the complete window. Same as whole_window if not scaled */
+    XID         damage;         /* Damage for syncing whole_drawable to whole_window */
     Window      client_window;  /* X window for the client area */
     RECT        window_rect;    /* USER window rectangle relative to win32 parent window client area */
     RECT        whole_rect;     /* X window rectangle for the whole window relative to win32 parent window client area */
@@ -715,10 +721,20 @@ extern void xinerama_init( unsigned int width, unsigned int height ) DECLSPEC_HI
 extern void init_recursive_mutex( pthread_mutex_t *mutex ) DECLSPEC_HIDDEN;
 
 /* DPI unaware scaling helpers */
+extern int muldiv(int a, int b, int c) DECLSPEC_HIDDEN;
 extern RECT dpi_unaware_get_virtual_screen_rect(void) DECLSPEC_HIDDEN;
-extern unsigned int get_window_effective_dpi( void ) DECLSPEC_HIDDEN;
+extern RECT dpi_unaware_get_primary_monitor_rect(void) DECLSPEC_HIDDEN;
+extern POINT dpi_unaware_virtual_screen_to_root( INT x, INT y ) DECLSPEC_HIDDEN;
+extern POINT dpi_unaware_root_to_virtual_screen( INT x, INT y ) DECLSPEC_HIDDEN;
+extern BOOL is_window_scaling_enabled( const struct x11drv_win_data *data ) DECLSPEC_HIDDEN;
+extern BOOL is_dpi_unaware_scaling_required( void ) DECLSPEC_HIDDEN;
+extern unsigned int get_effective_dpi( void ) DECLSPEC_HIDDEN;
 extern POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to ) DECLSPEC_HIDDEN;
+extern SIZE map_dpi_size( SIZE size, UINT dpi_from, UINT dpi_to ) DECLSPEC_HIDDEN;
 extern RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to ) DECLSPEC_HIDDEN;
+extern Drawable X11DRV_get_whole_drawable( HWND hwnd ) DECLSPEC_HIDDEN;
+extern Drawable X11DRV_get_root_window_drawable( void ) DECLSPEC_HIDDEN;
+extern Window get_invisible_root_window(void) DECLSPEC_HIDDEN;
 
 #define DEPTH_COUNT 3
 extern const unsigned int *depths DECLSPEC_HIDDEN;

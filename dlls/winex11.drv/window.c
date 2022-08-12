@@ -52,6 +52,9 @@
 #include "winuser.h"
 #include "shellscalingapi.h"
 
+#include "xcomposite.h"
+#include "xdamage.h"
+#include "xrender.h"
 #include "wine/debug.h"
 #include "wine/server.h"
 #include "mwm.h"
@@ -109,6 +112,8 @@ static const WCHAR foreign_window_prop[] =
     {'_','_','w','i','n','e','_','x','1','1','_','f','o','r','e','i','g','n','_','w','i','n','d','o','w',0};
 static const WCHAR whole_window_prop[] =
     {'_','_','w','i','n','e','_','x','1','1','_','w','h','o','l','e','_','w','i','n','d','o','w',0};
+static const WCHAR whole_drawable_prop[] =
+    {'_','_','w','i','n','e','_','x','1','1','_','w','h','o','l','e','_','d','r','a','w','a','b','l','e',0};
 static const WCHAR clip_window_prop[] =
     {'_','_','w','i','n','e','_','x','1','1','_','c','l','i','p','_','w','i','n','d','o','w',0};
 
@@ -364,6 +369,11 @@ static void sync_window_style( struct x11drv_win_data *data )
         int mask = get_window_attributes( data, &attr );
 
         XChangeWindowAttributes( data->display, data->whole_window, mask, &attr );
+        if (data->whole_drawable != data->whole_window)
+        {
+            mask &= CWColormap | CWBorderPixel | CWBitGravity;
+            XChangeWindowAttributes( data->display, data->whole_drawable, mask, &attr );
+        }
     }
 }
 
@@ -384,7 +394,7 @@ static void sync_window_region( struct x11drv_win_data *data, HRGN win_region )
     if (IsRectEmpty( &data->window_rect ))  /* set an empty shape */
     {
         static XRectangle empty_rect;
-        XShapeCombineRectangles( data->display, data->whole_window, ShapeBounding, 0, 0,
+        XShapeCombineRectangles( data->display, data->whole_drawable, ShapeBounding, 0, 0,
                                  &empty_rect, 1, ShapeSet, YXBanded );
         return;
     }
@@ -401,7 +411,7 @@ static void sync_window_region( struct x11drv_win_data *data, HRGN win_region )
 
     if (!hrgn)
     {
-        XShapeCombineMask( data->display, data->whole_window, ShapeBounding, 0, 0, None, ShapeSet );
+        XShapeCombineMask( data->display, data->whole_drawable, ShapeBounding, 0, 0, None, ShapeSet );
     }
     else
     {
@@ -411,7 +421,7 @@ static void sync_window_region( struct x11drv_win_data *data, HRGN win_region )
             NtUserMirrorRgn( data->hwnd, hrgn );
         if ((pRegionData = X11DRV_GetRegionData( hrgn, 0 )))
         {
-            XShapeCombineRectangles( data->display, data->whole_window, ShapeBounding,
+            XShapeCombineRectangles( data->display, data->whole_drawable, ShapeBounding,
                                      data->window_rect.left - data->whole_rect.left,
                                      data->window_rect.top - data->whole_rect.top,
                                      (XRectangle *)pRegionData->Buffer,
@@ -717,6 +727,12 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
         {
             size_hints->x = data->whole_rect.left;
             size_hints->y = data->whole_rect.top;
+            if (is_window_scaling_enabled(data))
+            {
+                size_hints->x = muldiv(size_hints->x, get_effective_dpi(), 96);
+                size_hints->y = muldiv(size_hints->y, get_effective_dpi(), 96);
+            }
+
             size_hints->flags |= PPosition;
         }
         else size_hints->win_gravity = NorthWestGravity;
@@ -727,6 +743,13 @@ static void set_size_hints( struct x11drv_win_data *data, DWORD style )
             size_hints->max_height = data->whole_rect.bottom - data->whole_rect.top;
             if (size_hints->max_width <= 0 ||size_hints->max_height <= 0)
                 size_hints->max_width = size_hints->max_height = 1;
+
+            if (is_window_scaling_enabled(data))
+            {
+                size_hints->max_width = muldiv(size_hints->max_width, get_effective_dpi(), 96);
+                size_hints->max_height = muldiv(size_hints->max_height, get_effective_dpi(), 96);
+            }
+
             size_hints->min_width = size_hints->max_width;
             size_hints->min_height = size_hints->max_height;
             size_hints->flags |= PMinSize | PMaxSize;
@@ -1307,7 +1330,6 @@ void X11DRV_X_to_window_rect( struct x11drv_win_data *data, RECT *rect, int x, i
     SetRect( rect, x, y, x + cx, y + cy );
 }
 
-
 /***********************************************************************
  *		sync_window_position
  *
@@ -1329,6 +1351,11 @@ static void sync_window_position( struct x11drv_win_data *data,
     {
         changes.width = data->whole_rect.right - data->whole_rect.left;
         changes.height = data->whole_rect.bottom - data->whole_rect.top;
+        if (is_dpi_unaware_scaling_required())
+        {
+            changes.width = muldiv(changes.width, get_effective_dpi(), USER_DEFAULT_SCREEN_DPI);
+            changes.height = muldiv(changes.height, get_effective_dpi(), USER_DEFAULT_SCREEN_DPI);
+        }
         /* if window rect is empty force size to 1x1 */
         if (changes.width <= 0 || changes.height <= 0) changes.width = changes.height = 1;
         if (changes.width > 65535) changes.width = 65535;
@@ -1339,7 +1366,7 @@ static void sync_window_position( struct x11drv_win_data *data,
     /* only the size is allowed to change for the desktop window */
     if (data->whole_window != root_window)
     {
-        POINT pt = virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
+        POINT pt = dpi_unaware_virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
         changes.x = pt.x;
         changes.y = pt.y;
         mask |= CWX | CWY;
@@ -1365,6 +1392,12 @@ static void sync_window_position( struct x11drv_win_data *data,
     update_net_wm_states( data );
     data->configure_serial = NextRequest( data->display );
     XReconfigureWMWindow( data->display, data->whole_window, data->vis.screen, mask, &changes );
+    if (is_window_scaling_enabled(data) && (mask & (CWWidth | CWHeight)))
+    {
+        changes.width = muldiv(changes.width, USER_DEFAULT_SCREEN_DPI, get_effective_dpi());
+        changes.height = muldiv(changes.height, USER_DEFAULT_SCREEN_DPI, get_effective_dpi());
+        XReconfigureWMWindow(data->display, data->whole_drawable, data->vis.screen, mask, &changes);
+    }
 #ifdef HAVE_LIBXSHAPE
     if (IsRectEmpty( old_window_rect ) != IsRectEmpty( &data->window_rect ))
         sync_window_region( data, (HRGN)1 );
@@ -1375,7 +1408,7 @@ static void sync_window_position( struct x11drv_win_data *data,
         int new_x_offset = data->window_rect.left - data->whole_rect.left;
         int new_y_offset = data->window_rect.top - data->whole_rect.top;
         if (old_x_offset != new_x_offset || old_y_offset != new_y_offset)
-            XShapeOffsetShape( data->display, data->whole_window, ShapeBounding,
+            XShapeOffsetShape( data->display, data->whole_drawable, ShapeBounding,
                                new_x_offset - old_x_offset, new_y_offset - old_y_offset );
     }
 #endif
@@ -1583,7 +1616,7 @@ Window create_client_window( HWND hwnd, const XVisualInfo *visual )
     cy = min( max( 1, data->client_rect.bottom - data->client_rect.top ), 65535 );
 
     ret = data->client_window = XCreateWindow( gdi_display,
-                                               data->whole_window ? data->whole_window : dummy_parent,
+                                               data->whole_drawable ? data->whole_drawable : dummy_parent,
                                                x, y, cx, cy, 0, default_visual.depth, InputOutput,
                                                visual->visual, CWBitGravity | CWWinGravity |
                                                CWBackingStore | CWColormap | CWBorderPixel, &attr );
@@ -1599,29 +1632,65 @@ Window create_client_window( HWND hwnd, const XVisualInfo *visual )
     return ret;
 }
 
+static pthread_mutex_t dpi_unaware_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* copied from kernelbase */
+int muldiv( int a, int b, int c )
+{
+    LONGLONG ret;
+
+    if (!c) return -1;
+
+    /* We want to deal with a positive divisor to simplify the logic. */
+    if (c < 0)
+    {
+        a = -a;
+        c = -c;
+    }
+
+    /* If the result is positive, we "add" to round. else, we subtract to round. */
+    if ((a < 0 && b < 0) || (a >= 0 && b >= 0))
+        ret = (((LONGLONG)a * b) + (c / 2)) / c;
+    else
+        ret = (((LONGLONG)a * b) - (c / 2)) / c;
+
+    if (ret > 2147483647 || ret < -2147483647) return -1;
+    return ret;
+}
+
 POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to )
 {
     if (dpi_from && dpi_to && dpi_from != dpi_to)
     {
-        pt.x = pt.x * dpi_to / dpi_from;
-        pt.y = pt.y * dpi_to / dpi_from;
+        pt.x = muldiv(pt.x, dpi_to, dpi_from);
+        pt.y = muldiv(pt.y, dpi_to, dpi_from);
     }
     return pt;
+}
+
+SIZE map_dpi_size( SIZE size, UINT dpi_from, UINT dpi_to )
+{
+    if (dpi_from && dpi_to && dpi_from != dpi_to)
+    {
+        size.cx = muldiv( size.cx, dpi_to, dpi_from );
+        size.cy = muldiv( size.cy, dpi_to, dpi_from );
+    }
+    return size;
 }
 
 RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to )
 {
     if (dpi_from && dpi_to && dpi_from != dpi_to)
     {
-        rect.left   = rect.left * dpi_to / dpi_from;
-        rect.top    = rect.top * dpi_to / dpi_from;
-        rect.right  = rect.right * dpi_to / dpi_from;
-        rect.bottom = rect.bottom * dpi_to / dpi_from;
+        rect.left   = muldiv(rect.left, dpi_to, dpi_from);
+        rect.top    = muldiv(rect.top, dpi_to, dpi_from);
+        rect.right  = muldiv(rect.right, dpi_to, dpi_from);
+        rect.bottom = muldiv(rect.bottom, dpi_to, dpi_from);
     }
     return rect;
 }
 
-unsigned int get_window_effective_dpi(void)
+unsigned int get_effective_dpi(void)
 {
     RECT rect;
     INT width;
@@ -1629,6 +1698,114 @@ unsigned int get_window_effective_dpi(void)
     rect = NtUserGetVirtualScreenRect();
     width = NtUserGetSystemMetrics(SM_CXVIRTUALSCREEN);
     return 96 * (rect.right - rect.right) / width;
+}
+
+BOOL is_window_scaling_enabled(const struct x11drv_win_data *data)
+{
+    return data->whole_drawable != data->whole_window;
+}
+
+BOOL is_dpi_unaware_scaling_required(void)
+{
+    if (!usexcomposite || !usexdamage || !usexrender)
+        return FALSE;
+
+    /* TODO: Fix compilation error after PE conversion */
+/*  if (GetAwarenessFromDpiAwarenessContext(GetThreadDpiAwarenessContext()) != DPI_AWARENESS_UNAWARE)
+        return FALSE; */
+    return FALSE;
+
+    return get_effective_dpi() > 96;
+}
+
+Drawable X11DRV_get_whole_drawable( HWND hwnd )
+{
+    struct x11drv_win_data *data = get_win_data( hwnd );
+    Window ret;
+
+    if (!data)
+    {
+        if (hwnd == NtUserGetDesktopWindow())
+            return root_window;
+        return (Window)NtUserGetProp(hwnd, whole_drawable_prop);
+    }
+
+    ret = data->whole_drawable;
+    release_win_data( data );
+    return ret;
+}
+
+static Window create_invisible_root_window(void)
+{
+    Window virtual_root;
+    Atom atoms[3];
+    RECT rect;
+
+    rect = NtUserGetVirtualScreenRect();
+    virtual_root = XCreateSimpleWindow(gdi_display, DefaultRootWindow(gdi_display), 0, 0,
+                                       rect.right - rect.left, rect.bottom - rect.top, 0, 0, 0);
+
+    atoms[0] = x11drv_atom(_NET_WM_STATE_HIDDEN);
+    atoms[1] = x11drv_atom(_NET_WM_STATE_SKIP_PAGER);
+    atoms[2] = x11drv_atom(_NET_WM_STATE_SKIP_TASKBAR);
+    XChangeProperty(gdi_display, virtual_root, x11drv_atom(_NET_WM_STATE), XA_ATOM, 32,
+                    PropModeReplace, (unsigned char *)atoms, ARRAY_SIZE(atoms));
+    XMapWindow(gdi_display, virtual_root);
+    XFlush(gdi_display);
+    return virtual_root;
+}
+
+Window get_invisible_root_window(void)
+{
+    pthread_mutex_lock(&dpi_unaware_mutex);
+    if (invisible_root_window)
+    {
+        pthread_mutex_unlock(&dpi_unaware_mutex);
+        return invisible_root_window;
+    }
+
+    invisible_root_window = create_invisible_root_window();
+    pthread_mutex_unlock(&dpi_unaware_mutex);
+    return invisible_root_window;
+}
+
+Drawable X11DRV_get_root_window_drawable(void)
+{
+    Display *display = thread_init_display();
+    unsigned int effective_dpi;
+    XSetWindowAttributes swa;
+    XWindowAttributes wa;
+
+    if (!is_dpi_unaware_scaling_required())
+        return root_window;
+
+    /* !! What about virtual screen */
+    if (is_virtual_desktop())
+        return root_window;
+
+    pthread_mutex_lock(&dpi_unaware_mutex);
+    if (root_window_drawable)
+    {
+        pthread_mutex_unlock(&dpi_unaware_mutex);
+        return root_window_drawable;
+    }
+
+    effective_dpi = get_effective_dpi();
+    XGetWindowAttributes(display, root_window, &wa);
+    wa.width = muldiv(wa.width, 96, effective_dpi);
+    wa.height = muldiv(wa.height, 96, effective_dpi);
+    swa.colormap = wa.colormap;
+    swa.bit_gravity = wa.bit_gravity;
+    root_window_drawable = XCreateWindow(display, get_invisible_root_window(), wa.x, wa.y, wa.width, wa.height, 0,
+                                         wa.depth, InputOutput, wa.visual,
+                                         CWColormap | CWBitGravity, &swa);
+
+    pXCompositeRedirectWindow(display, root_window_drawable, CompositeRedirectAutomatic);
+    XMapWindow(display, root_window_drawable);
+
+    root_window_damage = pXDamageCreate(display, root_window_drawable, XDamageReportNonEmpty);
+    pthread_mutex_unlock(&dpi_unaware_mutex);
+    return root_window_drawable;
 }
 
 /**********************************************************************
@@ -1671,17 +1848,57 @@ static void create_whole_window( struct x11drv_win_data *data )
     if (!(cy = data->whole_rect.bottom - data->whole_rect.top)) cy = 1;
     else if (cy > 65535) cy = 65535;
 
-    pos = virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
-    data->whole_window = XCreateWindow( data->display, root_window, pos.x, pos.y,
-                                        cx, cy, 0, data->vis.depth, InputOutput,
-                                        data->vis.visual, mask, &attr );
-    if (!data->whole_window) goto done;
+    if (is_dpi_unaware_scaling_required())
+    {
+        pos = dpi_unaware_virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
+        data->whole_drawable = XCreateWindow( data->display, get_invisible_root_window(), pos.x, pos.y,
+                                              cx, cy, 0, data->vis.depth, InputOutput,
+                                              data->vis.visual, mask & (CWColormap | CWBitGravity), &attr );
+        if (!data->whole_drawable) goto done;
+
+        pXCompositeRedirectWindow( data->display, data->whole_drawable, CompositeRedirectAutomatic );
+
+        /* Use scaled window for display */
+        pos = dpi_unaware_virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
+        if (is_dpi_unaware_scaling_required())
+        {
+            UINT effective_dpi = get_effective_dpi();
+            cx = muldiv(cx, effective_dpi, USER_DEFAULT_SCREEN_DPI);
+            cy = muldiv(cy, effective_dpi, USER_DEFAULT_SCREEN_DPI);
+        }
+        data->whole_window = XCreateWindow( data->display, root_window, pos.x, pos.y, cx, cy, 0,
+                                            data->vis.depth, InputOutput, data->vis.visual, mask,
+                                            &attr);
+        if (!data->whole_window)
+        {
+            XDestroyWindow( data->display, data->whole_drawable );
+            goto done;
+        }
+
+        /* Set X context so that events for data->whole_drawable are working */
+        XSaveContext( data->display, data->whole_drawable, winContext, (char *)data->hwnd );
+        /* whole_drawable has to be mapped for X damage to work */
+        XMapWindow(data->display, data->whole_drawable);
+
+        data->damage = pXDamageCreate( data->display, data->whole_drawable, XDamageReportNonEmpty );
+    }
+    else
+    {
+        pos = virtual_screen_to_root( data->whole_rect.left, data->whole_rect.top );
+        data->whole_drawable = XCreateWindow( data->display, root_window, pos.x, pos.y,
+                                              cx, cy, 0, data->vis.depth, InputOutput,
+                                              data->vis.visual, mask, &attr );
+        if (!data->whole_drawable) goto done;
+
+        data->whole_window = data->whole_drawable;
+    }
 
     set_initial_wm_hints( data->display, data->whole_window );
     set_wm_hints( data );
 
     XSaveContext( data->display, data->whole_window, winContext, (char *)data->hwnd );
     NtUserSetProp( data->hwnd, whole_window_prop, (HANDLE)data->whole_window );
+    NtUserSetProp( data->hwnd, whole_drawable_prop, (HANDLE)data->whole_drawable );
 
     /* set the window text */
     if (!NtUserInternalGetWindowText( data->hwnd, text, ARRAY_SIZE( text ))) text[0] = 0;
@@ -1737,7 +1954,23 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
             XSync( data->display, False );
         }
         XDeleteContext( data->display, data->whole_window, winContext );
-        if (!already_destroyed) XDestroyWindow( data->display, data->whole_window );
+        if (!already_destroyed)
+        {
+            /* Destroy damage first */
+            if (data->damage)
+            {
+                pXDamageDestroy( data->display, data->damage );
+                data->damage = 0;
+            }
+            if (data->whole_drawable != data->whole_window)
+            {
+                pXCompositeUnredirectWindow(data->display, data->whole_drawable,
+                                            CompositeRedirectAutomatic);
+                XDestroyWindow(data->display, data->whole_drawable);
+                data->whole_drawable = 0;
+            }
+            XDestroyWindow( data->display, data->whole_window );
+        }
     }
     if (data->whole_colormap) XFreeColormap( data->display, data->whole_colormap );
     data->whole_window = data->client_window = 0;
@@ -1756,6 +1989,7 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
     if (data->surface) window_surface_release( data->surface );
     data->surface = NULL;
     NtUserRemoveProp( data->hwnd, whole_window_prop );
+    NtUserRemoveProp( data->hwnd, whole_drawable_prop );
 }
 
 
@@ -1777,11 +2011,24 @@ void set_window_visual( struct x11drv_win_data *data, const XVisualInfo *vis, BO
     if (data->vis.visualid == vis->visualid) return;
     data->client_window = 0;
     destroy_whole_window( data, client_window != 0 /* don't destroy whole_window until reparented */ );
+    /* Destroy damage first */
+    if (data->damage)
+    {
+        pXDamageDestroy( data->display, data->damage );
+        data->damage = 0;
+    }
+    if (data->whole_drawable != whole_window)
+    {
+        pXCompositeUnredirectWindow(data->display, data->whole_drawable,
+                                    CompositeRedirectAutomatic);
+        XDestroyWindow(data->display, data->whole_drawable);
+        data->whole_drawable = 0;
+    }
     data->vis = *vis;
     create_whole_window( data );
     if (!client_window) return;
     /* move the client to the new parent */
-    XReparentWindow( data->display, client_window, data->whole_window,
+    XReparentWindow( data->display, client_window, data->whole_drawable,
                      data->client_rect.left - data->whole_rect.left,
                      data->client_rect.top - data->whole_rect.top );
     data->client_window = client_window;
@@ -2125,7 +2372,7 @@ HWND create_foreign_window( Display *display, Window xwin )
     {
         parent = NtUserGetDesktopWindow();
         style |= WS_POPUP;
-        pos = root_to_virtual_screen( attr.x, attr.y );
+        pos = dpi_unaware_root_to_virtual_screen( attr.x, attr.y );
     }
     else
     {
@@ -2188,7 +2435,7 @@ NTSTATUS x11drv_systray_init( void *arg )
 NTSTATUS x11drv_systray_clear( void *arg )
 {
     HWND hwnd = *(HWND*)arg;
-    Window win = X11DRV_get_whole_window( hwnd );
+    Window win = X11DRV_get_whole_drawable( hwnd );
     if (win) XClearArea( gdi_display, win, 0, 0, 0, 0, True );
     return 0;
 }
@@ -2386,7 +2633,7 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
     {
         struct x11drv_win_data *data = get_win_data( hwnd );
 
-        escape.drawable = data ? data->whole_window : X11DRV_get_whole_window( hwnd );
+        escape.drawable = data ? data->whole_drawable : X11DRV_get_whole_drawable( hwnd );
 
         /* special case: when repainting the root window, clip out top-level windows */
         if (data && data->whole_window == root_window) escape.mode = ClipByChildren;
@@ -2396,7 +2643,7 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
     {
         /* find the first ancestor that has a drawable */
         for (parent = hwnd; parent && parent != top; parent = NtUserGetAncestor( parent, GA_PARENT ))
-            if ((escape.drawable = X11DRV_get_whole_window( parent ))) break;
+            if ((escape.drawable = X11DRV_get_whole_drawable( parent ))) break;
 
         if (escape.drawable)
         {
@@ -2406,7 +2653,7 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
             OffsetRect( &escape.dc_rect, pt.x, pt.y );
             if (flags & DCX_CLIPCHILDREN) escape.mode = ClipByChildren;
         }
-        else escape.drawable = X11DRV_get_whole_window( top );
+        else escape.drawable = X11DRV_get_whole_drawable( top );
     }
 
     NtGdiExtEscape( hdc, NULL, 0, X11DRV_ESCAPE, sizeof(escape), (LPSTR)&escape, 0, NULL );
@@ -2608,7 +2855,7 @@ BOOL X11DRV_WindowPosChanging( HWND hwnd, HWND insert_after, UINT swp_flags,
     if (!layered || !NtUserGetLayeredWindowAttributes( hwnd, &key, NULL, &flags ) || !(flags & LWA_COLORKEY))
         key = CLR_INVALID;
 
-    *surface = create_surface( data->whole_window, &data->vis, &surface_rect, key, FALSE );
+    *surface = create_surface( data->whole_drawable, &data->vis, &surface_rect, key, FALSE );
 
 done:
     release_win_data( data );
@@ -2823,7 +3070,12 @@ UINT X11DRV_ShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp )
     XGetGeometry( thread_data->display, data->whole_window,
                   &root, &x, &y, &width, &height, &border, &depth );
     XTranslateCoordinates( thread_data->display, data->whole_window, root, 0, 0, &x, &y, &top );
-    pos = root_to_virtual_screen( x, y );
+    pos = dpi_unaware_root_to_virtual_screen( x, y );
+    if (is_window_scaling_enabled(data))
+    {
+        width = muldiv( width, USER_DEFAULT_SCREEN_DPI, get_effective_dpi() );
+        height = muldiv( height, USER_DEFAULT_SCREEN_DPI, get_effective_dpi() );
+    }
     X11DRV_X_to_window_rect( data, rect, pos.x, pos.y, width, height );
     swp &= ~(SWP_NOMOVE | SWP_NOCLIENTMOVE | SWP_NOSIZE | SWP_NOCLIENTSIZE);
 
@@ -2954,7 +3206,7 @@ BOOL X11DRV_UpdateLayeredWindow( HWND hwnd, const UPDATELAYEREDWINDOWINFO *info,
     surface = data->surface;
     if (!surface || !EqualRect( &surface->rect, &rect ))
     {
-        data->surface = create_surface( data->whole_window, &data->vis, &rect,
+        data->surface = create_surface( data->whole_drawable, &data->vis, &rect,
                                         color_key, data->use_alpha );
         if (surface) window_surface_release( surface );
         surface = data->surface;

@@ -99,7 +99,8 @@ static X11DRV_PDEVICE *create_x11_physdev( Drawable drawable )
 static BOOL CDECL X11DRV_CreateDC( PHYSDEV *pdev, LPCWSTR device, LPCWSTR output,
                                    const DEVMODEW* initData )
 {
-    X11DRV_PDEVICE *physDev = create_x11_physdev( root_window );
+    Drawable drawable = X11DRV_get_root_window_drawable();
+    X11DRV_PDEVICE *physDev = create_x11_physdev( drawable );
 
     if (!physDev) return FALSE;
 

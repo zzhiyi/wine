@@ -421,6 +421,36 @@ POINT root_to_virtual_screen(INT x, INT y)
     return pt;
 }
 
+POINT dpi_unaware_virtual_screen_to_root(INT x, INT y)
+{
+    RECT virtual = NtUserGetVirtualScreenRect();
+    POINT pt;
+
+    pt.x = x - virtual.left;
+    pt.y = y - virtual.top;
+
+    if (is_dpi_unaware_scaling_required())
+        pt = map_dpi_point(pt, USER_DEFAULT_SCREEN_DPI, get_effective_dpi());
+
+    return pt;
+}
+
+POINT dpi_unaware_root_to_virtual_screen(INT x, INT y)
+{
+    RECT virtual = NtUserGetVirtualScreenRect();
+    POINT pt;
+
+    pt.x = x;
+    pt.y = y;
+
+    if (is_dpi_unaware_scaling_required())
+        pt = map_dpi_point(pt, get_effective_dpi(), USER_DEFAULT_SCREEN_DPI);
+
+    pt.x += virtual.left;
+    pt.y += virtual.top;
+    return pt;
+}
+
 /* Get the primary monitor rect from the host system */
 RECT get_host_primary_monitor_rect(void)
 {

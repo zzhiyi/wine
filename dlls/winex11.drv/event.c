@@ -387,7 +387,8 @@ static inline BOOL call_event_handler( Display *display, XEvent *event )
 #endif
     if (XFindContext( display, event->xany.window, winContext, (char **)&hwnd ) != 0)
         hwnd = 0;  /* not for a registered window */
-    if (!hwnd && event->xany.window == root_window) hwnd = NtUserGetDesktopWindow();
+    if (!hwnd && (event->xany.window == root_window || event->xany.window == root_window_drawable))
+        hwnd = NtUserGetDesktopWindow();
 
     TRACE( "%lu %s for hwnd/window %p/%lx\n",
            event->xany.serial, dbgstr_event( event->type ), hwnd, event->xany.window );
@@ -932,7 +933,7 @@ static BOOL X11DRV_Expose( HWND hwnd, XEvent *xev )
         pos.x = event->x;
         pos.y = event->y;
     }
-    else pos = root_to_virtual_screen( event->x, event->y );
+    else pos = dpi_unaware_root_to_virtual_screen( event->x, event->y );
 
     if (!(data = get_win_data( hwnd ))) return FALSE;
 
@@ -1132,9 +1133,16 @@ static BOOL X11DRV_ConfigureNotify( HWND hwnd, XEvent *xev )
         pos.x = x;
         pos.y = y;
     }
-    else pos = root_to_virtual_screen( x, y );
+    else pos = dpi_unaware_root_to_virtual_screen( x, y );
 
-    X11DRV_X_to_window_rect( data, &rect, pos.x, pos.y, event->width, event->height );
+    cx = event->width;
+    cy = event->height;
+    if (is_window_scaling_enabled(data))
+    {
+        cx = muldiv( cx, USER_DEFAULT_SCREEN_DPI, get_effective_dpi() );
+        cy = muldiv( cy, USER_DEFAULT_SCREEN_DPI, get_effective_dpi() );
+    }
+    X11DRV_X_to_window_rect( data, &rect, pos.x, pos.y, cx, cy );
     if (root_coords) NtUserMapWindowPoints( 0, parent, (POINT *)&rect, 2 );
 
     TRACE( "win %p/%lx new X rect %d,%d,%dx%d (event %d,%d,%dx%d)\n",
@@ -1516,7 +1524,7 @@ static void EVENT_DropFromOffiX( HWND hWnd, XClientMessageEvent *event )
 
     XQueryPointer( event->display, win, &w_aux_root, &w_aux_child,
                    &x, &y, &dummy, &dummy, (unsigned int*)&aux_long);
-    pt = root_to_virtual_screen( x, y );
+    pt = dpi_unaware_root_to_virtual_screen( x, y );
 
     /* find out drop point and drop window */
     if (pt.x < 0 || pt.y < 0 || pt.x > cx || pt.y > cy)

@@ -418,7 +418,7 @@ static BOOL grab_clipping_window( const RECT *clip )
     TRACE( "clipping to %s win %lx\n", wine_dbgstr_rect(clip), clip_window );
 
     if (!data->clip_hwnd) XUnmapWindow( data->display, clip_window );
-    pos = virtual_screen_to_root( clip->left, clip->top );
+    pos = dpi_unaware_virtual_screen_to_root( clip->left, clip->top );
     XMoveResizeWindow( data->display, clip_window, pos.x, pos.y,
                        max( 1, clip->right - clip->left ), max( 1, clip->bottom - clip->top ) );
     XMapWindow( data->display, clip_window );
@@ -619,6 +619,9 @@ static void map_event_coords( HWND hwnd, Window window, Window event_root, int x
         {
             if (window == data->whole_window)
             {
+                if (is_dpi_unaware_scaling_required())
+                    pt = map_dpi_point(pt, get_effective_dpi(), USER_DEFAULT_SCREEN_DPI);
+
                 pt.x += data->whole_rect.left - data->client_rect.left;
                 pt.y += data->whole_rect.top - data->client_rect.top;
             }
@@ -626,6 +629,8 @@ static void map_event_coords( HWND hwnd, Window window, Window event_root, int x
             if (NtUserGetWindowLongW( hwnd, GWL_EXSTYLE ) & WS_EX_LAYOUTRTL)
                 pt.x = data->client_rect.right - data->client_rect.left - 1 - pt.x;
             NtUserMapWindowPoints( hwnd, 0, &pt, 1 );
+            if (is_dpi_unaware_scaling_required())
+                pt = map_dpi_point(pt, USER_DEFAULT_SCREEN_DPI, get_effective_dpi());
         }
         release_win_data( data );
     }
@@ -1649,7 +1654,7 @@ void move_resize_window( HWND hwnd, int dir )
     if (!(win = X11DRV_get_whole_window( hwnd ))) return;
 
     pt = NtUserGetThreadInfo()->message_pos;
-    pos = virtual_screen_to_root( (short)LOWORD( pt ), (short)HIWORD( pt ) );
+    pos = dpi_unaware_virtual_screen_to_root( (short)LOWORD( pt ), (short)HIWORD( pt ) );
 
     if (NtUserGetKeyState( VK_LBUTTON ) & 0x8000) button = 1;
     else if (NtUserGetKeyState( VK_MBUTTON ) & 0x8000) button = 2;
