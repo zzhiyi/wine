@@ -1178,6 +1178,7 @@ then
                       X11/extensions/XInput2.h \
                       X11/extensions/XShm.h \
                       X11/extensions/Xcomposite.h \
+                      X11/extensions/Xdamage.h \
                       X11/extensions/Xfixes.h \
                       X11/extensions/Xinerama.h \
                       X11/extensions/Xrandr.h \
@@ -1304,6 +1305,16 @@ then
         fi
         WINE_NOTICE_WITH(xcomposite,[test "x$ac_cv_lib_soname_Xcomposite" = "x"],
                          [libxcomposite ${notice_platform}development files not found, Xcomposite won't be supported.])
+
+        dnl *** Check for X Damage extension
+        if test "$ac_cv_header_X11_extensions_Xdamage_h" = "yes" -a "x$ac_cv_lib_soname_Xcomposite" != "x" -a "x$ac_cv_lib_soname_Xrender" != "x"
+        then
+                AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
+#include <X11/extensions/Xdamage.h>]], [[static typeof(XDamageQueryExtension) * func; if (func) return 0;]])],
+                  [WINE_CHECK_SONAME(Xdamage,XDamageQueryExtension,,,[$X_LIBS $X_EXTRA_LIBS])])
+        fi
+        WINE_NOTICE_WITH(xdamage,[test "x$ac_cv_lib_soname_Xdamage" = "x"],
+                         [libxdamage ${notice_platform}development files not found, X Damage won't be supported.])
 
         dnl *** Check for XICCallback struct
         AC_CHECK_MEMBERS([XICCallback.callback, XEvent.xcookie],,,

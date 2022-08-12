@@ -52,6 +52,7 @@
 #include "x11drv.h"
 #include "winreg.h"
 #include "xcomposite.h"
+#include "xdamage.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 #include "wine/list.h"
@@ -72,6 +73,7 @@ Window root_window;
 BOOL usexvidmode = TRUE;
 BOOL usexrandr = TRUE;
 BOOL usexcomposite = TRUE;
+BOOL usexdamage = FALSE;
 BOOL usexrender = FALSE;
 BOOL use_xkb = TRUE;
 BOOL use_take_focus = TRUE;
@@ -706,6 +708,9 @@ static NTSTATUS x11drv_init( void *arg )
     X11DRV_XRandR_Init();
 #ifdef SONAME_LIBXCOMPOSITE
     X11DRV_XComposite_Init();
+#endif
+#ifdef SONAME_LIBXDAMAGE
+    X11DRV_XDamage_Init();
 #endif
     X11DRV_XRender_Init();
     X11DRV_XInput2_Init();
