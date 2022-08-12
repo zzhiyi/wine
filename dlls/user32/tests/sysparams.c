@@ -4135,6 +4135,38 @@ static void test_GetAutoRotationState(void)
     ok(ret, "Expected GetAutoRotationState to succeed, error %ld\n", GetLastError());
 }
 
+static void init_function_pointers(void)
+{
+    HMODULE user32 = GetModuleHandleA("user32.dll");
+
+#define GET_PROC(module, func)                       \
+    p##func = (void *)GetProcAddress(module, #func); \
+    if (!p##func)                                    \
+        trace("GetProcAddress(%s, %s) failed.\n", #module, #func);
+
+    GET_PROC(user32, AdjustWindowRectExForDpi)
+    GET_PROC(user32, GetAutoRotationState)
+    GET_PROC(user32, GetAwarenessFromDpiAwarenessContext)
+    GET_PROC(user32, GetDpiForMonitorInternal)
+    GET_PROC(user32, GetDpiForSystem)
+    GET_PROC(user32, GetDpiForWindow)
+    GET_PROC(user32, GetProcessDpiAwarenessInternal)
+    GET_PROC(user32, GetSystemMetricsForDpi)
+    GET_PROC(user32, GetThreadDpiAwarenessContext)
+    GET_PROC(user32, GetWindowDpiAwarenessContext)
+    GET_PROC(user32, IsProcessDPIAware)
+    GET_PROC(user32, IsValidDpiAwarenessContext)
+    GET_PROC(user32, LogicalToPhysicalPointForPerMonitorDPI)
+    GET_PROC(user32, PhysicalToLogicalPointForPerMonitorDPI)
+    GET_PROC(user32, SetProcessDPIAware)
+    GET_PROC(user32, SetProcessDpiAwarenessContext)
+    GET_PROC(user32, SetProcessDpiAwarenessInternal)
+    GET_PROC(user32, SetThreadDpiAwarenessContext)
+    GET_PROC(user32, SystemParametersInfoForDpi)
+
+#undef GET_PROC
+}
+
 START_TEST(sysparams)
 {
     int argc;
@@ -4144,28 +4176,9 @@ START_TEST(sysparams)
     HDC hdc;
     HANDLE hThread;
     DWORD dwThreadId;
-    HANDLE hInstance, hdll;
+    HANDLE hInstance;
 
-    hdll = GetModuleHandleA("user32.dll");
-    pIsProcessDPIAware = (void*)GetProcAddress(hdll, "IsProcessDPIAware");
-    pSetProcessDPIAware = (void*)GetProcAddress(hdll, "SetProcessDPIAware");
-    pGetDpiForSystem = (void*)GetProcAddress(hdll, "GetDpiForSystem");
-    pGetDpiForWindow = (void*)GetProcAddress(hdll, "GetDpiForWindow");
-    pGetDpiForMonitorInternal = (void*)GetProcAddress(hdll, "GetDpiForMonitorInternal");
-    pSetProcessDpiAwarenessContext = (void*)GetProcAddress(hdll, "SetProcessDpiAwarenessContext");
-    pGetProcessDpiAwarenessInternal = (void*)GetProcAddress(hdll, "GetProcessDpiAwarenessInternal");
-    pSetProcessDpiAwarenessInternal = (void*)GetProcAddress(hdll, "SetProcessDpiAwarenessInternal");
-    pGetThreadDpiAwarenessContext = (void*)GetProcAddress(hdll, "GetThreadDpiAwarenessContext");
-    pSetThreadDpiAwarenessContext = (void*)GetProcAddress(hdll, "SetThreadDpiAwarenessContext");
-    pGetWindowDpiAwarenessContext = (void*)GetProcAddress(hdll, "GetWindowDpiAwarenessContext");
-    pGetAwarenessFromDpiAwarenessContext = (void*)GetProcAddress(hdll, "GetAwarenessFromDpiAwarenessContext");
-    pIsValidDpiAwarenessContext = (void*)GetProcAddress(hdll, "IsValidDpiAwarenessContext");
-    pGetSystemMetricsForDpi = (void*)GetProcAddress(hdll, "GetSystemMetricsForDpi");
-    pSystemParametersInfoForDpi = (void*)GetProcAddress(hdll, "SystemParametersInfoForDpi");
-    pAdjustWindowRectExForDpi = (void*)GetProcAddress(hdll, "AdjustWindowRectExForDpi");
-    pLogicalToPhysicalPointForPerMonitorDPI = (void*)GetProcAddress(hdll, "LogicalToPhysicalPointForPerMonitorDPI");
-    pPhysicalToLogicalPointForPerMonitorDPI = (void*)GetProcAddress(hdll, "PhysicalToLogicalPointForPerMonitorDPI");
-    pGetAutoRotationState = (void*)GetProcAddress(hdll, "GetAutoRotationState");
+    init_function_pointers();
 
     hInstance = GetModuleHandleA( NULL );
     hdc = GetDC(0);
