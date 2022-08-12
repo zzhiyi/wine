@@ -1398,6 +1398,12 @@ static void test_GetDisplayConfigBufferSizes(void)
     UINT32 paths, modes;
     LONG ret;
 
+    if (!pGetDisplayConfigBufferSizes)
+    {
+        win_skip("GetDisplayConfigBufferSizes() is not supported\n");
+        return;
+    }
+
     ret = pGetDisplayConfigBufferSizes(QDC_ALL_PATHS, NULL, NULL);
     ok(ret == ERROR_INVALID_PARAMETER, "got %ld\n", ret);
 
@@ -1693,6 +1699,12 @@ static void test_QueryDisplayConfig_result(UINT32 flags,
     DISPLAYCONFIG_TARGET_PREFERRED_MODE preferred_mode;
     DISPLAYCONFIG_ADAPTER_NAME adapter_name;
 
+    if (!pDisplayConfigGetDeviceInfo)
+    {
+        win_skip("DisplayConfigGetDeviceInfo() is not supported\n");
+        return;
+    }
+
     for (i = 0; i < paths; i++)
     {
         source_name.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
@@ -1815,6 +1827,12 @@ static void test_QueryDisplayConfig(void)
     DISPLAYCONFIG_TOPOLOGY_ID topologyid;
     LONG ret;
 
+    if (!pQueryDisplayConfig)
+    {
+        win_skip("QueryDisplayConfig() is not supported\n");
+        return;
+    }
+
     ret = pQueryDisplayConfig(QDC_ALL_PATHS, NULL, NULL, NULL, NULL, NULL);
     ok(ret == ERROR_INVALID_PARAMETER, "got %ld\n", ret);
 
@@ -1912,6 +1930,12 @@ static void test_DisplayConfigGetDeviceInfo(void)
     DISPLAYCONFIG_TARGET_PREFERRED_MODE preferred_mode;
     DISPLAYCONFIG_ADAPTER_NAME adapter_name;
 
+    if (!pDisplayConfigGetDeviceInfo)
+    {
+        win_skip("DisplayConfigGetDeviceInfo() is not supported\n");
+        return;
+    }
+
     ret = pDisplayConfigGetDeviceInfo(NULL);
     ok(ret == ERROR_GEN_FAILURE, "got %ld\n", ret);
 
@@ -1990,21 +2014,6 @@ static void test_DisplayConfigGetDeviceInfo(void)
     adapter_name.header.adapterId.HighPart = 0xFFFF;
     ret = pDisplayConfigGetDeviceInfo(&adapter_name.header);
     ok(ret == ERROR_GEN_FAILURE || ret == ERROR_INVALID_PARAMETER || ret == ERROR_NOT_SUPPORTED, "got %ld\n", ret);
-}
-
-static void test_display_config(void)
-{
-    if (!pGetDisplayConfigBufferSizes ||
-        !pQueryDisplayConfig ||
-        !pDisplayConfigGetDeviceInfo)
-    {
-        win_skip("DisplayConfig APIs are not supported\n");
-        return;
-    }
-
-    test_GetDisplayConfigBufferSizes();
-    test_QueryDisplayConfig();
-    test_DisplayConfigGetDeviceInfo();
 }
 
 static void test_DisplayConfigSetDeviceInfo(void)
@@ -2621,10 +2630,12 @@ START_TEST(monitor)
     test_enumdisplaydevices();
     test_ChangeDisplaySettingsEx();
     test_DisplayConfigSetDeviceInfo();
+    test_DisplayConfigGetDeviceInfo();
     test_EnumDisplayMonitors();
+    test_GetDisplayConfigBufferSizes();
+    test_QueryDisplayConfig();
     test_monitors();
     test_work_area();
-    test_display_config();
     test_handles();
     test_display_dc();
 }
