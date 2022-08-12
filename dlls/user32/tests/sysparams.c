@@ -3997,6 +3997,17 @@ static void test_dpi_context(void)
     context = pGetThreadDpiAwarenessContext();
     todo_wine
     ok( context == (DPI_AWARENESS_CONTEXT)(0x11 | flags), "wrong context %p\n", context );
+
+    /* Per-monitor aware v2 */
+    context = pSetThreadDpiAwarenessContext( DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 );
+    todo_wine
+    ok( context == (DPI_AWARENESS_CONTEXT)(0x80000011 | flags), "wrong context %p\n", context );
+    context = pGetThreadDpiAwarenessContext();
+    todo_wine
+    ok( context == (DPI_AWARENESS_CONTEXT)0x22, "wrong context %p\n", context );
+    awareness = pGetAwarenessFromDpiAwarenessContext( context );
+    ok( awareness == DPI_AWARENESS_PER_MONITOR_AWARE, "wrong awareness %u\n", awareness );
+
     for (i = 0; i < 0x100; i++)
     {
         awareness = pGetAwarenessFromDpiAwarenessContext( (DPI_AWARENESS_CONTEXT)i );
