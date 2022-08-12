@@ -175,7 +175,7 @@ static INT mru = -1;
 
 static void *xrender_handle;
 
-#define MAKE_FUNCPTR(f) static typeof(f) * p##f;
+#define MAKE_FUNCPTR(f) typeof(f) * p##f;
 MAKE_FUNCPTR(XRenderAddGlyphs)
 MAKE_FUNCPTR(XRenderChangePicture)
 MAKE_FUNCPTR(XRenderComposite)
