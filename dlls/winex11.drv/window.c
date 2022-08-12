@@ -1608,6 +1608,18 @@ POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to )
     return pt;
 }
 
+RECT map_dpi_rect( RECT rect, UINT dpi_from, UINT dpi_to )
+{
+    if (dpi_from && dpi_to && dpi_from != dpi_to)
+    {
+        rect.left   = rect.left * dpi_to / dpi_from;
+        rect.top    = rect.top * dpi_to / dpi_from;
+        rect.right  = rect.right * dpi_to / dpi_from;
+        rect.bottom = rect.bottom * dpi_to / dpi_from;
+    }
+    return rect;
+}
+
 /**********************************************************************
  *		create_whole_window
  *
