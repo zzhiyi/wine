@@ -714,6 +714,10 @@ extern BOOL xinerama_get_fullscreen_monitors( const RECT *rect, long *indices ) 
 extern void xinerama_init( unsigned int width, unsigned int height ) DECLSPEC_HIDDEN;
 extern void init_recursive_mutex( pthread_mutex_t *mutex ) DECLSPEC_HIDDEN;
 
+/* DPI unaware scaling helpers */
+extern RECT dpi_unaware_get_virtual_screen_rect(void) DECLSPEC_HIDDEN;
+extern POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to ) DECLSPEC_HIDDEN;
+
 #define DEPTH_COUNT 3
 extern const unsigned int *depths DECLSPEC_HIDDEN;
 

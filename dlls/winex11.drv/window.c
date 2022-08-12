@@ -1598,6 +1598,15 @@ Window create_client_window( HWND hwnd, const XVisualInfo *visual )
     return ret;
 }
 
+POINT map_dpi_point( POINT pt, UINT dpi_from, UINT dpi_to )
+{
+    if (dpi_from && dpi_to && dpi_from != dpi_to)
+    {
+        pt.x = pt.x * dpi_to / dpi_from;
+        pt.y = pt.y * dpi_to / dpi_from;
+    }
+    return pt;
+}
 
 /**********************************************************************
  *		create_whole_window
