@@ -5272,7 +5272,7 @@ void CDECL wined3d_device_flush(struct wined3d_device *device)
 {
     TRACE("device %p.\n", device);
 
-    wined3d_cs_emit_flush(device->cs);
+    wined3d_cs_emit_flush(device->cs, NULL);
 }
 
 static void update_swapchain_flags(struct wined3d_texture *texture)

@@ -243,6 +243,8 @@ HRESULT CDECL wined3d_swapchain_present(struct wined3d_swapchain *swapchain,
 
     wined3d_cs_emit_present(swapchain->device->cs, swapchain, src_rect,
             dst_rect, dst_window_override, swap_interval, flags);
+    /* Some applications expect Present to flush the command stream. */
+    wined3d_cs_emit_flush(swapchain->device->cs, NULL);
 
     wined3d_mutex_unlock();
 

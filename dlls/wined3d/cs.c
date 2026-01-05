@@ -132,6 +132,7 @@ struct wined3d_cs_draw
 struct wined3d_cs_flush
 {
     enum wined3d_cs_op opcode;
+    HANDLE event;
 };
 
 struct wined3d_cs_set_predication
@@ -1089,19 +1090,24 @@ void wined3d_cs_emit_draw_indirect(struct wined3d_cs *cs, enum wined3d_primitive
 
 static void wined3d_cs_exec_flush(struct wined3d_cs *cs, const void *data)
 {
+    const struct wined3d_cs_flush *op = data;
     struct wined3d_context *context;
 
     context = context_acquire(cs->device, NULL, 0);
     cs->device->adapter->adapter_ops->adapter_flush_context(context);
     context_release(context);
+
+    if (op->event)
+        SetEvent(op->event);
 }
 
-void wined3d_cs_emit_flush(struct wined3d_cs *cs)
+void wined3d_cs_emit_flush(struct wined3d_cs *cs, HANDLE event)
 {
     struct wined3d_cs_flush *op;
 
     op = wined3d_cs_require_space(cs, sizeof(*op), WINED3D_CS_QUEUE_DEFAULT);
     op->opcode = WINED3D_CS_OP_FLUSH;
+    op->event = event;
 
     wined3d_cs_submit(cs, WINED3D_CS_QUEUE_DEFAULT);
     cs->queries_flushed = TRUE;
