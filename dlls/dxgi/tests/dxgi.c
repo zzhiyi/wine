@@ -7396,6 +7396,7 @@ START_TEST(dxgi)
     queue_test(test_output_desc);
     queue_test(test_object_wrapping);
     queue_test(test_factory_check_feature_support);
+    queue_test(test_enqueue_set_event);
 
     run_queued_tests();
 
@@ -7447,6 +7448,38 @@ START_TEST(dxgi)
     run_on_d3d12(test_colour_space_support);
     run_on_d3d12(test_get_containing_output);
     run_on_d3d12(test_window_association);
+static void test_enqueue_set_event(void)
+{
+    IDXGIDevice2 *device2;
+    IDXGIDevice *device;
+    HANDLE event;
+    HRESULT hr;
+
+    if (!(device = create_device(0)))
+    {
+        skip("Failed to create device.\n");
+        return;
+    }
+
+    hr = IDXGIDevice_QueryInterface(device, &IID_IDXGIDevice2, (void **)&device2);
+    ok(hr == S_OK || hr == E_NOINTERFACE, "Got unexpected hr %#x.\n", hr);
+    if (hr == E_NOINTERFACE)
+    {
+        skip("IDXGIDevice2 is not supported.\n");
+        IDXGIDevice_Release(device);
+        return;
+    }
+
+    event = CreateEventA(NULL, FALSE, FALSE, NULL);
+    hr = IDXGIDevice2_EnqueueSetEvent(device2, event);
+    ok(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+    WaitForSingleObject(event, INFINITE);
+    CloseHandle(event);
+
+    IDXGIDevice2_Release(device2);
+    IDXGIDevice_Release(device);
+}
+
     run_on_d3d12(test_default_fullscreen_target_output);
     run_on_d3d12(test_mode_change);
 
