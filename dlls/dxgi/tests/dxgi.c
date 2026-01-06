@@ -7420,6 +7420,7 @@ START_TEST(dxgi)
     run_on_d3d10(test_window_association);
     run_on_d3d10(test_default_fullscreen_target_output);
     run_on_d3d10(test_mode_change);
+    run_on_dxgi(test_enqueue_set_event);
 
     if (!(d3d12_module = LoadLibraryA("d3d12.dll")))
     {
@@ -7448,6 +7449,12 @@ START_TEST(dxgi)
     run_on_d3d12(test_colour_space_support);
     run_on_d3d12(test_get_containing_output);
     run_on_d3d12(test_window_association);
+    run_on_d3d12(test_default_fullscreen_target_output);
+    run_on_d3d12(test_mode_change);
+
+    FreeLibrary(d3d12_module);
+}
+
 static void test_enqueue_set_event(void)
 {
     IDXGIDevice2 *device2;
@@ -7478,10 +7485,4 @@ static void test_enqueue_set_event(void)
 
     IDXGIDevice2_Release(device2);
     IDXGIDevice_Release(device);
-}
-
-    run_on_d3d12(test_default_fullscreen_target_output);
-    run_on_d3d12(test_mode_change);
-
-    FreeLibrary(d3d12_module);
 }

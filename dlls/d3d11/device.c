@@ -2514,7 +2514,7 @@ static void STDMETHODCALLTYPE d3d11_immediate_context_Flush(ID3D11DeviceContext1
     TRACE("iface %p.\n", iface);
 
     wined3d_mutex_lock();
-    wined3d_device_flush(device->wined3d_device);
+    wined3d_device_flush(device->wined3d_device, NULL);
     wined3d_mutex_unlock();
 }
 
@@ -5498,7 +5498,7 @@ static void STDMETHODCALLTYPE d3d10_device_Flush(ID3D10Device1 *iface)
     TRACE("iface %p.\n", iface);
 
     wined3d_mutex_lock();
-    wined3d_device_flush(device->wined3d_device);
+    wined3d_device_flush(device->wined3d_device, NULL);
     wined3d_mutex_unlock();
 }
 

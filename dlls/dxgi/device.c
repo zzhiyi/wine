@@ -20,7 +20,7 @@
 #include "config.h"
 #include "wine/port.h"
 
-#include "../wined3d/wined3d_private.h"
+#include "wine/wined3d.h"
 #include "dxgi_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dxgi);
@@ -323,7 +323,7 @@ static HRESULT STDMETHODCALLTYPE dxgi_device_EnqueueSetEvent(IWineDXGIDevice *if
     TRACE("iface %p, event %p.\n", iface, event);
 
     wined3d_mutex_lock();
-    wined3d_cs_emit_flush(device->wined3d_device->cs, event);
+    wined3d_device_flush(device->wined3d_device, event);
     wined3d_mutex_unlock();
 
     return S_OK;

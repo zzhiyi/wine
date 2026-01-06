@@ -5268,11 +5268,11 @@ void CDECL wined3d_device_evict_managed_resources(struct wined3d_device *device)
     }
 }
 
-void CDECL wined3d_device_flush(struct wined3d_device *device)
+void CDECL wined3d_device_flush(struct wined3d_device *device, HANDLE event)
 {
-    TRACE("device %p.\n", device);
+    TRACE("device %p, event %p.\n", device, event);
 
-    wined3d_cs_emit_flush(device->cs, NULL);
+    wined3d_cs_emit_flush(device->cs, event);
 }
 
 static void update_swapchain_flags(struct wined3d_texture *texture)
